@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 
-interface Track {
+export interface Track {
     id: string;
     title: string;
     artist: string;
     thumbnail: string;
     url: string;
-    duration?: number;
-    isVideo?: boolean;
+    duration?: string;
+    type?: 'song' | 'video' | 'playlist' | 'mix';
 }
 
 interface PlayerState {
@@ -16,13 +16,14 @@ interface PlayerState {
     volume: number;
     progress: number;
     queue: Track[];
-    history: Track[];
+    playbackMode: 'audio' | 'video';
 
     setTrack: (track: Track) => void;
     togglePlay: () => void;
     setVolume: (volume: number) => void;
     setProgress: (progress: number) => void;
-    addToQueue: (track: Track) => void;
+    setQueue: (tracks: Track[]) => void;
+    setPlaybackMode: (mode: 'audio' | 'video') => void;
     playNext: () => void;
     playPrevious: () => void;
 }
@@ -33,37 +34,34 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     volume: 0.5,
     progress: 0,
     queue: [],
-    history: [],
+    playbackMode: 'audio',
 
     setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0 }),
     togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
     setVolume: (volume) => set({ volume }),
     setProgress: (progress) => set({ progress }),
-    addToQueue: (track) => set((state) => ({ queue: [...state.queue, track] })),
+    setQueue: (tracks) => set({ queue: tracks }),
+    setPlaybackMode: (mode) => set({ playbackMode: mode }),
+
     playNext: () => {
-        const { queue, history, currentTrack } = get();
-        if (queue.length > 0) {
-            const nextTrack = queue[0];
-            set({
-                currentTrack: nextTrack,
-                queue: queue.slice(1),
-                history: currentTrack ? [...history, currentTrack] : history,
-                isPlaying: true,
-                progress: 0
-            });
+        const { queue, currentTrack } = get();
+        if (queue.length === 0) return;
+        const currentIndex = queue.findIndex((track) => track.id === currentTrack?.id);
+        if (currentIndex === -1 || currentIndex === queue.length - 1) {
+            set({ currentTrack: queue[0], isPlaying: true, progress: 0 });
+        } else {
+            set({ currentTrack: queue[currentIndex + 1], isPlaying: true, progress: 0 });
         }
     },
+
     playPrevious: () => {
-        const { history, currentTrack } = get();
-        if (history.length > 0) {
-            const prevTrack = history[history.length - 1];
-            set({
-                currentTrack: prevTrack,
-                history: history.slice(0, -1),
-                queue: currentTrack ? [currentTrack, ...get().queue] : get().queue,
-                isPlaying: true,
-                progress: 0
-            });
+        const { queue, currentTrack } = get();
+        if (queue.length === 0) return;
+        const currentIndex = queue.findIndex((track) => track.id === currentTrack?.id);
+        if (currentIndex === -1 || currentIndex === 0) {
+            set({ currentTrack: queue[queue.length - 1], isPlaying: true, progress: 0 });
+        } else {
+            set({ currentTrack: queue[currentIndex - 1], isPlaying: true, progress: 0 });
         }
     },
 }));

@@ -1,13 +1,25 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, Download } from "lucide-react";
+import React, { useState } from "react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, Download, Video, Music } from "lucide-react";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { cn } from "@/lib/utils";
 import PlayerContent from "./PlayerContent";
 
 const Player = () => {
-    const { currentTrack, isPlaying, togglePlay, volume, setVolume, playNext, playPrevious, progress } = usePlayerStore();
+    const {
+        currentTrack,
+        isPlaying,
+        togglePlay,
+        volume,
+        setVolume,
+        playNext,
+        playPrevious,
+        progress,
+        playbackMode,
+        setPlaybackMode
+    } = usePlayerStore();
+
     const [isMuted, setIsMuted] = useState(false);
     const [prevVolume, setPrevVolume] = useState(volume);
 
@@ -53,10 +65,10 @@ const Player = () => {
                 {/* Controls */}
                 <div className="flex flex-col items-center max-w-[400px] w-full gap-y-2">
                     <div className="flex items-center gap-x-6 text-neutral-400">
-                        <Shuffle size={20} className="cursor-pointer hover:text-white transition" />
+                        <Shuffle size={18} className="cursor-pointer hover:text-white transition" />
                         <SkipBack
                             onClick={playPrevious}
-                            size={24}
+                            size={22}
                             className="cursor-pointer hover:text-white transition"
                         />
                         <button
@@ -64,56 +76,76 @@ const Player = () => {
                             className="bg-white rounded-full p-2 hover:scale-105 transition"
                         >
                             {isPlaying ? (
-                                <Pause size={28} className="text-black fill-black" />
+                                <Pause size={24} className="text-black fill-black" />
                             ) : (
-                                <Play size={28} className="text-black fill-black ml-1" />
+                                <Play size={24} className="text-black fill-black ml-1" />
                             )}
                         </button>
                         <SkipForward
                             onClick={playNext}
-                            size={24}
+                            size={22}
                             className="cursor-pointer hover:text-white transition"
                         />
-                        <Repeat size={20} className="cursor-pointer hover:text-white transition" />
+                        <Repeat size={18} className="cursor-pointer hover:text-white transition" />
                     </div>
                     <div className="w-full flex items-center gap-x-2 px-2">
                         <span className="text-[10px] text-neutral-400 min-w-[30px] text-right">0:00</span>
-                        <div className="flex-1 h-1 bg-neutral-600 rounded-full relative group cursor-pointer overflow-hidden">
+                        <div className="flex-1 h-1 bg-neutral-800 rounded-full relative group cursor-pointer overflow-hidden">
                             <div
-                                className="absolute h-full bg-white rounded-full group-hover:bg-green-500 transition-all duration-300"
+                                className="absolute h-full bg-neutral-400 group-hover:bg-emerald-500 transition-all"
                                 style={{ width: `${progress * 100}%` }}
-                            ></div>
+                            />
                         </div>
-                        <span className="text-[10px] text-neutral-400 min-w-[30px]">3:45</span>
+                        <span className="text-[10px] text-neutral-400 min-w-[30px]">{currentTrack.duration || "3:45"}</span>
                     </div>
                 </div>
 
                 {/* Volume & Extras */}
-                <div className="hidden md:flex items-center justify-end pr-2 gap-x-3">
+                <div className="hidden md:flex items-center justify-end pr-2 gap-x-4">
+                    <button
+                        onClick={() => setPlaybackMode(playbackMode === 'audio' ? 'video' : 'audio')}
+                        className={cn(
+                            "flex items-center gap-x-2 px-3 py-1.5 rounded-full text-[10px] font-bold transition whitespace-nowrap",
+                            playbackMode === 'video'
+                                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
+                                : "bg-neutral-800 text-neutral-400 hover:text-white border border-white/5"
+                        )}
+                    >
+                        {playbackMode === 'audio' ? <Music size={12} /> : <Video size={12} />}
+                        {playbackMode === 'audio' ? "Audio" : "Video"}
+                    </button>
+
                     <button
                         onClick={handleDownload}
-                        className="text-neutral-400 hover:text-white transition mr-2"
+                        className="text-neutral-400 hover:text-white transition"
                         title="Download"
                     >
-                        <Download size={20} />
+                        <Download size={18} />
                     </button>
-                    <button onClick={toggleMute} className="text-neutral-400 hover:text-white transition">
-                        {volume === 0 || isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                    </button>
-                    <div className="w-24 h-1 bg-neutral-600 rounded-full cursor-pointer relative group">
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.01"
-                            value={volume}
-                            onChange={(e) => setVolume(parseFloat(e.target.value))}
-                            className="absolute w-full h-full opacity-0 cursor-pointer z-10"
-                        />
-                        <div
-                            className="absolute h-full bg-white rounded-full group-hover:bg-green-500"
-                            style={{ width: `${volume * 100}%` }}
-                        ></div>
+
+                    <div className="flex items-center gap-x-2 w-[120px]">
+                        <button onClick={toggleMute} className="text-neutral-400 hover:text-white transition">
+                            {volume === 0 || isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                        </button>
+                        <div className="flex-1 h-1 bg-neutral-800 rounded-full relative group">
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={isMuted ? 0 : volume}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    setVolume(val);
+                                    if (val > 0) setIsMuted(false);
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                            <div
+                                className="absolute h-full bg-neutral-400 group-hover:bg-emerald-500 rounded-full"
+                                style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
