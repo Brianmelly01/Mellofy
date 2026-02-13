@@ -74,8 +74,9 @@ const AuthModal = () => {
                             className="w-full rounded-xl bg-white/5 border border-white/10 p-4 text-white outline-none transition focus:border-emerald-500/50 focus:bg-white/10"
                             disabled={isLoading}
                         />
-                        {errors.name && (
-                            <p className="mt-1 text-xs text-red-500">{errors.name.message as string}</p>
+                        {/* @ts-ignore */}
+                        {(errors as any).name && (
+                            <p className="mt-1 text-xs text-red-500">{(errors as any).name.message}</p>
                         )}
                     </div>
                 )}
