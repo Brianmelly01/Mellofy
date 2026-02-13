@@ -3,6 +3,7 @@ import { Figtree } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import Player from "@/components/Player";
+import AuthModal from "@/components/AuthModal";
 
 const font = Figtree({ subsets: ["latin"] });
 
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={font.className}>
+        <AuthModal />
         <div className="flex h-full">
           <Sidebar />
           <main className="h-full flex-1 overflow-y-auto py-2 pr-2">

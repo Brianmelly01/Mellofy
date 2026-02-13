@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/lib/store/useAuthStore";
+import { motion } from "framer-motion";
 
 interface HeaderProps {
     children?: React.ReactNode;
@@ -11,6 +13,12 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ children, className }) => {
     const router = useRouter();
+    const { onOpen, user, setUser } = useAuthStore();
+
+    const handleLogout = () => {
+        setUser(null);
+        router.push("/");
+    };
 
     return (
         <div className={cn("h-fit bg-gradient-to-b from-emerald-800 p-6", className)}>
@@ -33,18 +41,41 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
                     {/* Mobile header icons could go here */}
                 </div>
                 <div className="flex justify-between items-center gap-x-4">
-                    <>
-                        <div>
-                            <button className="bg-transparent text-neutral-300 font-medium hover:opacity-75 transition">
-                                Sign up
+                    {user ? (
+                        <div className="flex items-center gap-x-4">
+                            <button
+                                onClick={handleLogout}
+                                className="bg-white px-6 py-2 rounded-full font-bold hover:opacity-75 transition text-black"
+                            >
+                                Logout
+                            </button>
+                            <button
+                                onClick={() => router.push("/account")}
+                                className="bg-white rounded-full p-2 hover:opacity-75 transition"
+                            >
+                                <User className="text-black" />
                             </button>
                         </div>
-                        <div>
-                            <button className="bg-white px-6 py-2 rounded-full font-bold hover:opacity-75 transition text-black">
-                                Log in
-                            </button>
-                        </div>
-                    </>
+                    ) : (
+                        <>
+                            <div>
+                                <button
+                                    onClick={() => onOpen("signup")}
+                                    className="bg-transparent text-neutral-300 font-medium hover:opacity-75 transition"
+                                >
+                                    Sign up
+                                </button>
+                            </div>
+                            <div>
+                                <button
+                                    onClick={() => onOpen("login")}
+                                    className="bg-white px-6 py-2 rounded-full font-bold hover:opacity-75 transition text-black"
+                                >
+                                    Log in
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
             {children}
