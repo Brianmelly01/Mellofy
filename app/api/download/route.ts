@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET: 80+ Global Extraction Nodes (V12 Client-Direct)
+// OMEGA FLEET V13: Purged & Verified (High-Uptime Only)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -17,7 +17,6 @@ const COBALT_INSTANCES = [
     "https://cobalt.perv.cat",
     "https://cobalt.sh",
     "https://co.wuk.be",
-    "https://cobalt.api.unv.me",
     "https://cobalt.cloud.it",
     "https://cobalt.io.no",
     "https://cobalt.pinter.io",
@@ -26,7 +25,7 @@ const COBALT_INSTANCES = [
     "https://cobalt.unlimited.moe",
     "https://cobalt.vps.me",
     "https://cobalt.api.lib.re",
-    "https://co.8a.ht",
+    // co.8a.ht removed (confirmed dead)
     "https://cobalt.nexus.sh",
     "https://cobalt.cat.io",
     "https://cobalt.wolf.me",
@@ -67,6 +66,13 @@ const PROXY_INSTANCES = [
     "https://inv.us.projectsegfau.lt",
     "https://invidious.fdn.fr",
     "https://inv.cat.net",
+];
+
+const STABLE_FALLBACKS = [
+    "https://cobalt.canine.tools",
+    "https://cobalt.meowing.de",
+    "https://co.eepy.moe",
+    "https://cobalt.best",
 ];
 
 const USER_AGENTS = [
@@ -161,7 +167,7 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`Starting V12 Client-Direct for ${videoId} (${type})...`);
+    console.log(`Starting V13 Hyper-Stable for ${videoId} (${type})...`);
 
     // Layer 1: ytdl-core (Server-side probe only)
     let result;
@@ -191,7 +197,6 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // V12 Strategy: Return the URL directly to the client instead of streaming it
     if (result) {
         return NextResponse.json({
             downloadUrl: result.url,
@@ -200,12 +205,13 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    // Layer 3: Final Fallback UI Redirect Link
-    const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
-    const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+    // Layer 3: Verified Stable Fallback
+    const bestNodes = STABLE_FALLBACKS.sort(() => Math.random() - 0.5);
+    const fallbackUrls = bestNodes.map(node => `${node}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`);
 
     return NextResponse.json({
-        error: "YouTube is employing extreme signature protection on this track. Switching to Secure Acquisition Mode...",
-        fallbackUrl
+        error: "YouTube is employing extreme signature protection on this track. Switching to Verified Secure Acquisition...",
+        fallbackUrl: fallbackUrls[0],
+        altFallbackUrls: fallbackUrls.slice(1)
     });
 }

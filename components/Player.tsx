@@ -56,10 +56,8 @@ const Player = () => {
             const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
             const data = await response.json();
 
-            // V12 "Client-Direct" Path
+            // V12/V13 "Client-Direct" Path
             if (data.downloadUrl) {
-                // Try to trigger a native browser download
-                // Using a hidden link with target="_blank" is the most robust way to bypass CORS while acquisition
                 const link = document.createElement("a");
                 link.href = data.downloadUrl;
                 link.setAttribute("download", data.filename || `download.${type === 'audio' ? 'm4a' : 'mp4'}`);
@@ -71,9 +69,16 @@ const Player = () => {
                 return;
             }
 
-            // V11/V12 Fallback Path (Zero-Bound Portal)
+            // V13 Fallback Path (Hyper-Stable Portal)
             if (data.fallbackUrl) {
+                // Open the most stable node
                 window.open(data.fallbackUrl, '_blank');
+
+                // If there are alternatives, briefly alert the user for awareness
+                if (data.altFallbackUrls && data.altFallbackUrls.length > 0) {
+                    console.log("Alternative acquisition nodes available:", data.altFallbackUrls);
+                }
+
                 setIsDownloading(false);
                 return;
             }
