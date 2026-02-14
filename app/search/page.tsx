@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import SearchInput from "@/components/SearchInput";
 import SearchContent from "@/app/search/components/SearchContent";
 import { searchYouTube } from "@/lib/actions";
+import { Track } from "@/lib/store/usePlayerStore";
 
 interface SearchProps {
     searchParams: Promise<{
@@ -12,8 +13,14 @@ interface SearchProps {
 const Search = async ({ searchParams }: SearchProps) => {
     const { title } = await searchParams;
 
-    // Fetch from YouTube API here based on title
-    const results = title ? await searchYouTube(title) : [];
+    let results: Track[] = [];
+    try {
+        if (title) {
+            results = await searchYouTube(title);
+        }
+    } catch (error) {
+        console.error("Search page error:", error);
+    }
 
     return (
         <div className="bg-neutral-900 rounded-lg h-full w-full overflow-hidden overflow-y-auto">
