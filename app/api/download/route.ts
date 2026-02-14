@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET V16: Deep-Probe Elite (Mobile Bridge Overhaul)
+// OMEGA FLEET V17: Ghost-Node Purge (Reliability Overhaul)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -37,7 +37,7 @@ const PROXY_INSTANCES = [
     "https://invidious.ducks.party",
     "https://inv.vern.cc",
     "https://invidious.flokinet.to",
-    "https://iv.melmac.space",
+    // iv.melmac.space removed (GHOST NODE - confirmed broken)
     "https://pipedapi.kavin.rocks",
     "https://piped-api.lunar.icu",
     "https://piped-api.garudalinux.org",
@@ -74,7 +74,7 @@ const STABLE_FALLBACKS = [
     "https://cobalt.best",
 ];
 
-// V16 Mobile-Elite Headers (Android/iOS Bypass)
+// V16-V17 Mobile-Elite Headers (Android/iOS Bypass)
 const GET_ELITE_HEADERS = (isMobile: boolean = false) => {
     const agents = isMobile
         ? ["com.google.android.youtube/19.05.35 (Linux; U; Android 14; en_US; Pixel 8 Pro; Build/UQ1A.240205.004)"]
@@ -88,6 +88,32 @@ const GET_ELITE_HEADERS = (isMobile: boolean = false) => {
         "X-YouTube-Client-Version": isMobile ? "2.20240224.0.0" : "2.20240224.01.00",
     };
 };
+
+/**
+ * V17 Pre-Download Verification (Stealth HEAD)
+ * Ensures a URL is actually a media stream and not an error page or broken redirect.
+ */
+async function verifyUrl(url: string, force: boolean = false): Promise<boolean> {
+    try {
+        const res = await fetch(url, {
+            method: "HEAD",
+            signal: AbortSignal.timeout(force ? 4000 : 2500)
+        });
+        if (!res.ok) return false;
+
+        const contentType = res.headers.get("content-type") || "";
+        // High-confidence media types
+        if (contentType.includes("video") || contentType.includes("audio") || contentType.includes("application/ogg") || contentType.includes("application/x-mpegurl")) {
+            return true;
+        }
+        // Fallback for nodes that return generic octet-stream but are valid
+        if (contentType.includes("application/octet-stream")) return true;
+
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
 
 async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string; quality?: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
@@ -115,15 +141,20 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
             if (!res.ok) return null;
             const data = await res.json();
             if (data.status === "error") return null;
-            if (data.url) return { url: data.url, title: data.filename || "download", quality };
-            if (data.picker) return { url: data.picker[0]?.url, title: data.filename || "download", quality };
+
+            const resultUrl = data.url || (data.picker ? data.picker[0]?.url : null);
+            if (!resultUrl) return null;
+
+            // V17: Zero-Redirect Verification
+            if (await verifyUrl(resultUrl, force)) {
+                return { url: resultUrl, title: data.filename || "download", quality };
+            }
             return null;
         } catch (e) {
             return null;
         }
     };
 
-    // V16: In force mode, we prioritize quality, but scale down if needed
     let result = await tryParams("1080", true);
     if (!result) result = await tryParams("720", true);
     if (!result && !force) result = await tryParams("360", true);
@@ -150,11 +181,15 @@ async function tryInvidious(instance: string, videoId: string, type: string, for
                 ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
                 : (formats.find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
 
-            if (format?.url) return { url: format.url, title: data.title || "download" };
+            if (format?.url && await verifyUrl(format.url, force)) {
+                return { url: format.url, title: data.title || "download" };
+            }
         } else {
             const streams = type === "audio" ? data.audioStreams : data.videoStreams;
             const stream = streams?.find((s: any) => s.quality === (force ? "1080p" : "720p")) || streams?.find((s: any) => s.mimeType?.includes("mp4")) || (streams ? streams[0] : null);
-            if (stream?.url) return { url: stream.url, title: data.title || "download" };
+            if (stream?.url && await verifyUrl(stream.url, force)) {
+                return { url: stream.url, title: data.title || "download" };
+            }
         }
         return null;
     } catch (e) {
@@ -170,7 +205,7 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`V16 Deep-Probe: ${videoId} (Force: ${force})`);
+    console.log(`V17 Ghost-Purge Probe: ${videoId} (Force: ${force})`);
 
     const probeType = async (t: string) => {
         let result;
@@ -187,7 +222,9 @@ export async function GET(request: NextRequest) {
                 ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
                 : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
 
-            if (formatSelection?.url) result = { url: formatSelection.url, title: info.videoDetails?.title || "download" };
+            if (formatSelection?.url && await verifyUrl(formatSelection.url, force)) {
+                result = { url: formatSelection.url, title: info.videoDetails?.title || "download" };
+            }
         } catch (e) { }
 
         // Layer 2: Elite Shotgun (Expanded batch size for force)
@@ -226,7 +263,7 @@ export async function GET(request: NextRequest) {
     if (result) return NextResponse.json({ downloadUrl: result.url, filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}` });
 
     return NextResponse.json({
-        error: "Signature Obliteration failed. Handing over to Secure Acquisition...",
+        error: "Fleet verification failed. Node status: GHOST detected.",
         fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`
     });
 }

@@ -56,7 +56,7 @@ const Player = () => {
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
     const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating'>('probing');
-    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'done'>('ytdl');
+    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'verifying' | 'done'>('ytdl');
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -336,7 +336,7 @@ const Player = () => {
                                             <>
                                                 {extractionLayer === 'ytdl' && "Deciphering YouTube Signature logic (InnerTube Layer)..."}
                                                 {extractionLayer === 'cobalt' && "Injecting stream into Global Cobalt Network..."}
-                                                {extractionLayer === 'shotgun' && "Probing 90+ verified worldwide proxy nodes..."}
+                                                {extractionLayer === 'shotgun' && "Probing verified worldwide proxy nodes..."}
                                             </>
                                         )}
                                         {hubStatus === 'obliterating' && (
@@ -346,8 +346,9 @@ const Player = () => {
                                                 {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
                                             </>
                                         )}
+                                        {extractionLayer === 'verifying' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
-                                        {hubStatus === 'fallback' && "Universal Signature detected. Handing over to Secure Mode window."}
+                                        {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
                                     </p>
                                 </div>
 
@@ -421,7 +422,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v16.0 Deep-Probe Elite
+                                Mellofy Ultra-Resilience Fleet v17.0 Ghost-Node Purge
                             </p>
                         </div>
                     </div>
