@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET: 80+ Global Extraction Nodes (V11 Optimized)
+// OMEGA FLEET: 80+ Global Extraction Nodes (V12 Client-Direct)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -161,9 +161,9 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`Starting V11 Zero-Bound for ${videoId} (${type})...`);
+    console.log(`Starting V12 Client-Direct for ${videoId} (${type})...`);
 
-    // Layer 1: ytdl-core
+    // Layer 1: ytdl-core (Server-side probe only)
     let result;
     try {
         const ytdl = require("@distube/ytdl-core");
@@ -191,41 +191,21 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // Layer 3: Zero-Bound Handshake (Fallback JSON)
-    if (!result) {
-        const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
-        const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
-
+    // V12 Strategy: Return the URL directly to the client instead of streaming it
+    if (result) {
         return NextResponse.json({
-            error: "YouTube is employing extreme signature protection on this track. Switching to Secure Acquisition Mode...",
-            fallbackUrl
-        }, { status: 200 }); // Return 200 so the frontend can read the body
-    }
-
-    try {
-        const response = await fetch(result.url, {
-            headers: {
-                "User-Agent": USER_AGENTS[0],
-                Referer: "https://www.youtube.com/",
-            },
-            signal: AbortSignal.timeout(50000),
+            downloadUrl: result.url,
+            title: result.title,
+            filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}`
         });
-
-        if (!response.ok || !response.body) {
-            const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
-            const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
-            return NextResponse.json({ error: "Stream proxy failed. Switching to Secure Acquisition Mode...", fallbackUrl }, { status: 200 });
-        }
-
-        const safeTitle = result.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim() || "download";
-        const headers = new Headers();
-        headers.set("Content-Disposition", `attachment; filename="${safeTitle}.${type === "audio" ? "m4a" : "mp4"}"`);
-        headers.set("Content-Type", type === "audio" ? "audio/mp4" : "video/mp4");
-        const contentLength = response.headers.get("Content-Length");
-        if (contentLength) headers.set("Content-Length", contentLength);
-
-        return new NextResponse(response.body as any, { status: 200, headers });
-    } catch (error: any) {
-        return NextResponse.json({ error: "Omega transfer timed out." }, { status: 504 });
     }
+
+    // Layer 3: Final Fallback UI Redirect Link
+    const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
+    const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+
+    return NextResponse.json({
+        error: "YouTube is employing extreme signature protection on this track. Switching to Secure Acquisition Mode...",
+        fallbackUrl
+    });
 }

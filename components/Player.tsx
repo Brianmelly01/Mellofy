@@ -54,39 +54,35 @@ const Player = () => {
 
         try {
             const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
+            const data = await response.json();
 
-            // Check if response is JSON (fallback mode)
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                const data = await response.json();
-                if (data.fallbackUrl) {
-                    // Open the acquisition portal in a new tab
-                    window.open(data.fallbackUrl, '_blank');
-                    setIsDownloading(false);
-                    return;
-                }
-                if (!response.ok) {
-                    alert(data.error || "Download failed");
-                    setIsDownloading(false);
-                    return;
-                }
-            }
-
-            if (!response.ok) {
-                alert("Download failed. The server might be temporarily restricted.");
+            // V12 "Client-Direct" Path
+            if (data.downloadUrl) {
+                // Try to trigger a native browser download
+                // Using a hidden link with target="_blank" is the most robust way to bypass CORS while acquisition
+                const link = document.createElement("a");
+                link.href = data.downloadUrl;
+                link.setAttribute("download", data.filename || `download.${type === 'audio' ? 'm4a' : 'mp4'}`);
+                link.setAttribute("target", "_blank");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setIsDownloading(false);
                 return;
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            const ext = type === 'audio' ? 'm4a' : 'mp4';
-            link.href = url;
-            link.setAttribute("download", `${currentTrack.title}.${ext}`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            // V11/V12 Fallback Path (Zero-Bound Portal)
+            if (data.fallbackUrl) {
+                window.open(data.fallbackUrl, '_blank');
+                setIsDownloading(false);
+                return;
+            }
+
+            if (data.error) {
+                alert(data.error);
+            } else {
+                alert("Download initiation failed. Please try again.");
+            }
         } catch (err) {
             alert('Download failed. Secure Acquisition Mode failed to initialize.');
         } finally {
