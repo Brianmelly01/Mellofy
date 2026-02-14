@@ -14,17 +14,12 @@ const Search = async ({ searchParams }: SearchProps) => {
     const { title } = await searchParams;
 
     let results: Track[] = [];
-    let errorMsg = "";
     try {
         if (title) {
             results = await searchYouTube(title);
-            if (results.length === 0) {
-                console.log("No results returned for:", title);
-            }
         }
     } catch (error: any) {
         console.error("Search page error:", error);
-        errorMsg = error.message || "An unexpected error occurred.";
     }
 
     return (
@@ -35,7 +30,7 @@ const Search = async ({ searchParams }: SearchProps) => {
                     <SearchInput />
                 </div>
             </Header>
-            <SearchContent results={results} term={title} error={errorMsg} />
+            <SearchContent results={results} term={title} />
         </div>
     );
 };
