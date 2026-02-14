@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, Download, Video, Music } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, Download, Video, Music, ChevronDown } from "lucide-react";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { cn } from "@/lib/utils";
 import PlayerContent from "./PlayerContent";
@@ -22,6 +22,8 @@ const Player = () => {
 
     const [isMuted, setIsMuted] = useState(false);
     const [prevVolume, setPrevVolume] = useState(volume);
+    const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const toggleMute = () => {
         if (isMuted) {
@@ -33,14 +35,35 @@ const Player = () => {
         setIsMuted(!isMuted);
     };
 
-    const handleDownload = () => {
+    const handleDownload = async (type: 'audio' | 'video') => {
         if (!currentTrack) return;
-        const link = document.createElement("a");
-        link.href = currentTrack.url;
-        link.setAttribute("download", `${currentTrack.title}.mp3`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        setIsDownloading(true);
+        setShowDownloadMenu(false);
+
+        try {
+            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
+
+            if (!response.ok) {
+                const data = await response.json();
+                alert(`Download failed: ${data.error || 'Unknown error'}`);
+                return;
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const ext = type === 'audio' ? 'm4a' : 'mp4';
+            link.href = url;
+            link.setAttribute("download", `${currentTrack.title}.${ext}`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert('Download failed. Please try again.');
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     if (!currentTrack) return null;
@@ -115,13 +138,38 @@ const Player = () => {
                         {playbackMode === 'audio' ? "Audio" : "Video"}
                     </button>
 
-                    <button
-                        onClick={handleDownload}
-                        className="text-neutral-400 hover:text-white transition"
-                        title="Download"
-                    >
-                        <Download size={18} />
-                    </button>
+                    {/* Download dropdown */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                            disabled={isDownloading}
+                            className={cn(
+                                "text-neutral-400 hover:text-white transition",
+                                isDownloading && "animate-pulse text-emerald-400"
+                            )}
+                            title="Download"
+                        >
+                            <Download size={18} />
+                        </button>
+                        {showDownloadMenu && (
+                            <div className="absolute bottom-full right-0 mb-2 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden min-w-[160px] z-50">
+                                <button
+                                    onClick={() => handleDownload('audio')}
+                                    className="flex items-center gap-x-2 w-full px-4 py-2.5 text-sm text-white hover:bg-neutral-800 transition"
+                                >
+                                    <Music size={14} />
+                                    Download Audio
+                                </button>
+                                <button
+                                    onClick={() => handleDownload('video')}
+                                    className="flex items-center gap-x-2 w-full px-4 py-2.5 text-sm text-white hover:bg-neutral-800 transition"
+                                >
+                                    <Video size={14} />
+                                    Download Video
+                                </button>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex items-center gap-x-2 w-[120px]">
                         <button onClick={toggleMute} className="text-neutral-400 hover:text-white transition">
