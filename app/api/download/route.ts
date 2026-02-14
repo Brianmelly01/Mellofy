@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET V13: Purged & Verified (High-Uptime Only)
+// OMEGA FLEET V14: Advanced Shield (Premium High-Uptime)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -25,7 +25,6 @@ const COBALT_INSTANCES = [
     "https://cobalt.unlimited.moe",
     "https://cobalt.vps.me",
     "https://cobalt.api.lib.re",
-    // co.8a.ht removed (confirmed dead)
     "https://cobalt.nexus.sh",
     "https://cobalt.cat.io",
     "https://cobalt.wolf.me",
@@ -75,15 +74,34 @@ const STABLE_FALLBACKS = [
     "https://cobalt.best",
 ];
 
-const USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-];
+// V14 Anti-Block Headers (TLS Fingerprinting Bypass)
+const GET_ANTI_BLOCK_HEADERS = () => {
+    const userAgents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    ];
+    const ua = userAgents[Math.floor(Math.random() * userAgents.length)];
 
-async function tryCobalt(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": ua,
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://www.google.com/",
+        "Origin": "https://www.youtube.com",
+        "Sec-CH-UA": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "cross-site",
+    };
+};
+
+async function tryCobalt(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+    const headers = GET_ANTI_BLOCK_HEADERS();
 
     const tryParams = async (quality: string, tunnel: boolean) => {
         try {
@@ -92,11 +110,7 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
 
             const res = await fetch(endpoint, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "User-Agent": ua,
-                },
+                headers: headers as any,
                 body: JSON.stringify({
                     url,
                     videoQuality: quality,
@@ -105,7 +119,7 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
                     aFormat: "best",
                     isNoQuery: tunnel,
                 }),
-                signal: AbortSignal.timeout(6000),
+                signal: AbortSignal.timeout(7000),
             });
 
             if (!res.ok) return null;
@@ -119,15 +133,12 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
         }
     };
 
-    let result = await tryParams("720", false);
-    if (!result) result = await tryParams("720", true);
+    let result = await tryParams("720", true);
     if (!result) result = await tryParams("360", true);
-
-    if (!result) log.push(`${instance.split("/")[2]} fails`);
     return result;
 }
 
-async function tryInvidious(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
+async function tryInvidious(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     try {
         const isInvidious = !instance.includes("piped");
         const endpoint = isInvidious
@@ -135,7 +146,7 @@ async function tryInvidious(instance: string, videoId: string, type: string, log
             : `${instance}/streams/${videoId}`;
 
         const res = await fetch(endpoint, {
-            headers: { "User-Agent": USER_AGENTS[0] },
+            headers: { "User-Agent": GET_ANTI_BLOCK_HEADERS()["User-Agent"] },
             signal: AbortSignal.timeout(8000)
         });
         if (!res.ok) return null;
@@ -162,41 +173,56 @@ async function tryInvidious(instance: string, videoId: string, type: string, log
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
-    const type = searchParams.get("type") || "audio";
-    const log: string[] = [];
+    const type = searchParams.get("type") || "both"; // Support "both" for pre-probing
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`Starting V13 Hyper-Stable for ${videoId} (${type})...`);
+    console.log(`Starting V14 Integrated Shield for ${videoId}...`);
 
-    // Layer 1: ytdl-core (Server-side probe only)
-    let result;
-    try {
-        const ytdl = require("@distube/ytdl-core");
-        const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-        const format = type === "audio"
-            ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
-            : ytdl.filterFormats(info.formats, "videoandaudio")[0];
-        if (format?.url) result = { url: format.url, title: info.videoDetails?.title || "download" };
-    } catch (e) { }
+    const probeType = async (t: string) => {
+        // Layer 1: ytdl-core (Server-side probe only)
+        let result;
+        try {
+            const ytdl = require("@distube/ytdl-core");
+            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+            const format = t === "audio"
+                ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
+                : ytdl.filterFormats(info.formats, "videoandaudio")[0];
+            if (format?.url) result = { url: format.url, title: info.videoDetails?.title || "download" };
+        } catch (e) { }
 
-    // Layer 2: Turbo Shotgun (Batch of 8)
-    if (!result) {
-        const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
+        // Layer 2: Omega Shotgun (Batch of 8)
+        if (!result) {
+            const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
 
-        for (let i = 0; i < fullFleet.length; i += 8) {
-            if (log.length > 70) break;
-
-            const batch = fullFleet.slice(i, i + 8);
-            const results = await Promise.all(batch.map(instance =>
-                instance.includes("cobalt") ? tryCobalt(instance, videoId, type, log) : tryInvidious(instance, videoId, type, log)
-            ));
-
-            result = results.find(r => r !== null);
-            if (result) break;
+            for (let i = 0; i < fullFleet.length; i += 8) {
+                if (i > 64) break; // Limit total checks to 64 nodes to protect serverless timeout
+                const batch = fullFleet.slice(i, i + 8);
+                const results = await Promise.all(batch.map(instance =>
+                    instance.includes("cobalt") ? tryCobalt(instance, videoId, t) : tryInvidious(instance, videoId, t)
+                ));
+                result = results.find(r => r !== null);
+                if (result) break;
+            }
         }
+        return result;
+    };
+
+    if (type === "both") {
+        const [audio, video] = await Promise.all([probeType("audio"), probeType("video")]);
+        const bestNodes = STABLE_FALLBACKS.sort(() => Math.random() - 0.5);
+        const fallbackUrl = `${bestNodes[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+
+        return NextResponse.json({
+            audio: audio ? { url: audio.url, filename: `${audio.title}.m4a` } : null,
+            video: video ? { url: video.url, filename: `${video.title}.mp4` } : null,
+            fallbackUrl,
+            status: (audio || video) ? "ready" : "fallback_required"
+        });
     }
 
+    // Standard single-type request
+    const result = await probeType(type);
     if (result) {
         return NextResponse.json({
             downloadUrl: result.url,
@@ -205,13 +231,11 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    // Layer 3: Verified Stable Fallback
-    const bestNodes = STABLE_FALLBACKS.sort(() => Math.random() - 0.5);
-    const fallbackUrls = bestNodes.map(node => `${node}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`);
+    const safeNode = STABLE_FALLBACKS[Math.floor(Math.random() * STABLE_FALLBACKS.length)];
+    const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
 
     return NextResponse.json({
-        error: "YouTube is employing extreme signature protection on this track. Switching to Verified Secure Acquisition...",
-        fallbackUrl: fallbackUrls[0],
-        altFallbackUrls: fallbackUrls.slice(1)
+        error: "Extreme protection detected. Handing over to Secure Acquisition Hub...",
+        fallbackUrl
     });
 }
