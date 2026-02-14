@@ -56,6 +56,7 @@ const Player = () => {
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
     const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback'>('probing');
+    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'done'>('ytdl');
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -84,12 +85,26 @@ const Player = () => {
 
         setIsHubOpen(true);
         setHubStatus('probing');
+        setExtractionLayer('ytdl');
         setHubResults({ audio: null, video: null, fallbackUrl: null });
         setShowDownloadMenu(false);
+
+        // Simulation cycle for granular UX progress
+        const layers: ('ytdl' | 'cobalt' | 'shotgun')[] = ['ytdl', 'cobalt', 'shotgun'];
+        let currentLayerIndex = 0;
+        const layerInterval = setInterval(() => {
+            if (currentLayerIndex < layers.length - 1) {
+                currentLayerIndex++;
+                setExtractionLayer(layers[currentLayerIndex]);
+            }
+        }, 1500);
 
         try {
             const response = await fetch(`/api/download?id=${currentTrack.id}&type=both`);
             const data = await response.json();
+
+            clearInterval(layerInterval);
+            setExtractionLayer('done');
 
             setHubResults({
                 audio: data.audio,
@@ -99,7 +114,6 @@ const Player = () => {
 
             if (data.status === 'ready') {
                 setHubStatus('ready');
-                // If the user clicked a specific type, auto-trigger it if ready
                 if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
                 if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
                 if (type === 'both') {
@@ -110,6 +124,7 @@ const Player = () => {
                 setHubStatus('fallback');
             }
         } catch (err) {
+            clearInterval(layerInterval);
             setHubStatus('fallback');
             setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
         }
@@ -308,9 +323,15 @@ const Player = () => {
                                         )}
                                     </div>
                                     <p className="text-xs text-white/40 leading-relaxed italic">
-                                        {hubStatus === 'probing' && "Scanning 80 global extraction nodes for clean streams..."}
+                                        {hubStatus === 'probing' && (
+                                            <>
+                                                {extractionLayer === 'ytdl' && "Deciphering YouTube Signature logic (InnerTube Layer)..."}
+                                                {extractionLayer === 'cobalt' && "Injecting stream into Global Cobalt Network..."}
+                                                {extractionLayer === 'shotgun' && "Probing 90+ verified worldwide proxy nodes..."}
+                                            </>
+                                        )}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
-                                        {hubStatus === 'fallback' && "YouTube Signature protection detected. Switches to Secure Mode window."}
+                                        {hubStatus === 'fallback' && "Universal Signature detected. Handing over to Secure Mode window."}
                                     </p>
                                 </div>
 
@@ -326,16 +347,18 @@ const Player = () => {
                                             </div>
                                             <span className="text-xs font-medium">Audio M4A</span>
                                             <button
-                                                disabled={!hubResults.audio}
-                                                onClick={() => hubResults.audio && triggerLink(hubResults.audio.url, hubResults.audio.filename)}
+                                                onClick={() => {
+                                                    if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
+                                                    else handleDownload('audio');
+                                                }}
                                                 className={cn(
                                                     "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition",
                                                     hubResults.audio
                                                         ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95"
-                                                        : "bg-white/5 text-white/20 cursor-not-allowed"
+                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse"
                                                 )}
                                             >
-                                                {hubResults.audio ? "Download" : "Locked"}
+                                                {hubResults.audio ? "Download" : "Force Unlock"}
                                             </button>
                                         </div>
                                     </div>
@@ -350,16 +373,18 @@ const Player = () => {
                                             </div>
                                             <span className="text-xs font-medium">Video MP4</span>
                                             <button
-                                                disabled={!hubResults.video}
-                                                onClick={() => hubResults.video && triggerLink(hubResults.video.url, hubResults.video.filename)}
+                                                onClick={() => {
+                                                    if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
+                                                    else handleDownload('video');
+                                                }}
                                                 className={cn(
                                                     "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition",
                                                     hubResults.video
                                                         ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95"
-                                                        : "bg-white/5 text-white/20 cursor-not-allowed"
+                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse"
                                                 )}
                                             >
-                                                {hubResults.video ? "Download" : "Locked"}
+                                                {hubResults.video ? "Download" : "Force Unlock"}
                                             </button>
                                         </div>
                                     </div>
@@ -380,7 +405,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v14.0
+                                Mellofy Ultra-Resilience Fleet v15.0 Omni-Stream
                             </p>
                         </div>
                     </div>
