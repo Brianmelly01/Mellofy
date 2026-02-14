@@ -1,47 +1,51 @@
-"use server";
-
 export async function searchYouTube(query: string) {
-    console.log("[DEBUG] searchYouTube called with query:", query);
-    if (!query) return [];
+    if (!query || typeof query !== 'string') return [];
+
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return [];
+
+    console.log("[DEBUG] searchYouTube searching for:", trimmedQuery);
 
     try {
-        // Use dynamic require to avoid issues with top-level imports in server actions
         const ytSearch = require("yt-search");
-        const search = typeof ytSearch === 'function' ? ytSearch : (ytSearch as any).default || ytSearch;
+        // Ensure we handle both default and named exports
+        const searchFunc = typeof ytSearch === 'function' ? ytSearch : ytSearch.default || ytSearch;
 
-        console.log("[DEBUG] Calling ytSearch...");
-        const r = await search(query);
-        console.log("[DEBUG] ytSearch success, found", r?.videos?.length, "videos");
+        if (typeof searchFunc !== 'function') {
+            throw new Error("yt-search library not loaded correctly");
+        }
 
-        if (!r || !r.videos) {
-            console.error("[DEBUG] ytSearch returned invalid results:", r);
+        const r = await searchFunc(trimmedQuery);
+
+        if (!r) {
+            console.error("[DEBUG] ytSearch returned nothing");
             return [];
         }
 
-        const videos = r.videos.slice(0, 15).map((video: any) => ({
+        const videos = (r.videos || []).slice(0, 15).map((video: any) => ({
             id: video.videoId,
-            title: video.title,
+            title: video.title || "Untitled",
             artist: video.author?.name || "Unknown Artist",
-            thumbnail: video.thumbnail,
-            url: video.url,
-            duration: video.timestamp,
+            thumbnail: video.thumbnail || "",
+            url: video.url || "",
+            duration: video.timestamp || "",
             type: 'video' as const,
         }));
 
         const playlists = (r.playlists || []).slice(0, 5).map((list: any) => ({
             id: list.listId,
-            title: list.title,
+            title: list.title || "Untitled Playlist",
             artist: list.author?.name || "Unknown Artist",
-            thumbnail: list.thumbnail,
-            url: list.url,
+            thumbnail: list.thumbnail || "",
+            url: list.url || "",
             type: 'playlist' as const,
         }));
 
-        console.log("[DEBUG] Returning", videos.length + playlists.length, "results");
+        console.log(`[DEBUG] Found ${videos.length} videos and ${playlists.length} playlists`);
         return [...videos, ...playlists];
     } catch (error: any) {
-        console.error("[DEBUG] YouTube search error:", error.message || error);
-        // Return empty array instead of throwing to avoid 500 if search fails
-        return [];
+        console.error("[DEBUG] YouTube search error:", error);
+        // Throwing here so the Page component can catch it and show the error message
+        throw new Error(`YouTube Search failed: ${error.message || "Unknown error"}`);
     }
 }
