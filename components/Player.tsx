@@ -391,7 +391,7 @@ const Player = () => {
                                                 {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
                                             </>
                                         )}
-                                        {hubStatus === 'tunneling' && "Hyper-Tunnel Active: Rerouting via Secure Bridge (IP-Lock Detected)..."}
+                                        {hubStatus === 'tunneling' && "Omni-Tunnel Active: Hyper-Piping through Authorized Bridge..."}
                                         {extractionLayer === 'verifying' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
                                         {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
@@ -474,7 +474,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v19.0 Hyper-Tunnel
+                                Mellofy Ultra-Resilience Fleet v20.0 Omni-Tunnel
                             </p>
                         </div>
                     </div>

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET V18: Ghost-Protocol (Piping & PoToken Overhaul)
+// OMEGA FLEET V20: Omni-Tunnel (Hyper-Piping Resilience)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -73,7 +73,7 @@ const STABLE_FALLBACKS = [
     "https://cobalt.best",
 ];
 
-// V18 PoToken & Elite Headers
+// V20 Omni-Tunnel Headers (Mobile-Elite Identity Bridge)
 const GET_GHOST_HEADERS = (isMobile: boolean = false) => {
     const agents = isMobile
         ? ["com.google.android.youtube/19.05.35 (Linux; U; Android 14; en_US; Pixel 8 Pro; Build/UQ1A.240205.004)"]
@@ -81,13 +81,14 @@ const GET_GHOST_HEADERS = (isMobile: boolean = false) => {
 
     return {
         "Content-Type": "application/json",
-        "Accept": "application/json",
+        "Accept": "*/*",
         "User-Agent": agents[0],
         "X-YouTube-Client-Name": isMobile ? "21" : "1",
         "X-YouTube-Client-Version": isMobile ? "2.20240224.0.0" : "2.20240224.01.00",
-        // V18: Emulated PoToken (Simplified for extraction logic)
         "X-Goog-Visitor-Id": Math.random().toString(36).substring(2, 12),
         "X-YouTube-Po-Token": "M" + Math.random().toString(36).substring(2, 40),
+        "Origin": "https://www.youtube.com",
+        "Referer": "https://www.youtube.com/",
     };
 };
 
@@ -196,48 +197,65 @@ export async function GET(request: NextRequest) {
     const videoId = searchParams.get("id");
     const type = searchParams.get("type") || "both";
     const force = searchParams.get("force") === "true";
-    const pipe = searchParams.get("pipe") === "true"; // V18: Explicit piping request
+    const pipe = searchParams.get("pipe") === "true";
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    // V18: Server-Side Stream Piping (The "Nuke")
+    // V20 OMNI-TUNNEL: Identity-Preserving Server-Side Pipe
     if (pipe) {
         try {
+            console.log(`Hyper-Piping: ${videoId} (${type})`);
             const ytdl = require("@distube/ytdl-core");
-            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+            // Perform InnerTube lookup with authorized headers
+            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
+                requestOptions: { headers: GET_GHOST_HEADERS(true) }
+            });
+
             const format = type === "audio"
                 ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
                 : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.hasVideo && f.hasAudio) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
 
             if (!format?.url) throw new Error("No format found for piping");
 
-            const streamResponse = await fetch(format.url);
-            if (!streamResponse.ok) throw new Error("Failed to fetch stream for piping");
+            // V20: Preserve Mobile-Elite Identity for Binary Transfer
+            const streamResponse = await fetch(format.url, {
+                headers: {
+                    ...GET_GHOST_HEADERS(true),
+                    "Range": "bytes=0-"
+                }
+            });
 
-            // Return a streaming response back to the client
+            if (!streamResponse.ok) throw new Error("Failed to fetch binary tunnel");
+
             const headers = new Headers();
-            headers.set("Content-Type", format.mimeType || (type === "audio" ? "audio/mp4" : "video/mp4"));
-            headers.set("Content-Disposition", `attachment; filename="${info.videoDetails.title}.${type === "audio" ? "m4a" : "mp4"}"`);
+            const sourceContentType = streamResponse.headers.get("Content-Type");
+            const sourceLength = streamResponse.headers.get("Content-Length");
+
+            headers.set("Content-Type", sourceContentType || (type === "audio" ? "audio/mp4" : "video/mp4"));
+            headers.set("Content-Disposition", `attachment; filename="${info.videoDetails.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
+
+            // V20: Mandatory Content-Length for browser stability
+            if (sourceLength) headers.set("Content-Length", sourceLength);
+            headers.set("Accept-Ranges", "bytes");
+            headers.set("Cache-Control", "no-cache");
 
             return new NextResponse(streamResponse.body, { headers });
         } catch (e) {
-            return NextResponse.json({ error: "Ghost-Protocol Piping failed." }, { status: 500 });
+            console.error("Omni-Tunnel Error:", e);
+            return NextResponse.json({ error: "Hyper-Tunnel Interrupted." }, { status: 500 });
         }
     }
 
-    console.log(`V18 Ghost-Protocol Probe: ${videoId} (Force: ${force})`);
+    console.log(`V20 Omni-Tunnel Probe: ${videoId} (Force: ${force})`);
 
     const probeType = async (t: string) => {
         let result;
-        // Layer 1: Ghost-Identity (InnerTube + PoToken Emulation)
+        // Layer 1: Omni-Identity (InnerTube + PoToken Mobile-Elite)
         try {
             const ytdl = require("@distube/ytdl-core");
-            const options = {
-                requestOptions: {
-                    headers: GET_GHOST_HEADERS(force)
-                }
-            };
-            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, options);
+            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
+                requestOptions: { headers: GET_GHOST_HEADERS(force) }
+            });
             const formatSelection = t === "audio"
                 ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
                 : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
@@ -276,7 +294,6 @@ export async function GET(request: NextRequest) {
             video: video ? { url: video.url, filename: `${video.title}.mp4` } : null,
             fallbackUrl,
             status: (audio || video) ? "ready" : "fallback_required",
-            // V18 Flag: Tells frontend to enable server-piping if both failed
             ghostProtocolEnabled: true
         });
     }
@@ -285,7 +302,7 @@ export async function GET(request: NextRequest) {
     if (result) return NextResponse.json({ downloadUrl: result.url, filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}` });
 
     return NextResponse.json({
-        error: "Ghost-Protocol Handshake failed. Initiating Tunnel-Pipe...",
+        error: "Omni-Tunnel Handshake failed. Initiating Hyper-Piping...",
         fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
         ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`
     });
