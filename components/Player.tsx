@@ -57,6 +57,7 @@ const Player = () => {
     const [isHubOpen, setIsHubOpen] = useState(false);
     const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating' | 'tunneling'>('probing');
     const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'verifying' | 'done'>('ytdl');
+    const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -177,9 +178,57 @@ const Player = () => {
     const handleGhostProtocol = async (type: 'audio' | 'video') => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
-        const pipeUrl = `/api/download?id=${currentTrack.id}&type=${type}&pipe=true`;
-        triggerLink(pipeUrl, `${currentTrack.title}.${type === 'audio' ? 'm4a' : 'mp4'}`);
-        setTimeout(() => setHubStatus('ready'), 3000); // Visual feedback completion
+        setDownloadProgress(0);
+
+        // Titan-Beam: Front-end Bridge-Fetch (Audio)
+        if (type === 'audio') {
+            try {
+                const pipeUrl = `/api/download?id=${currentTrack.id}&type=audio&pipe=true`;
+                const response = await fetch(pipeUrl);
+
+                if (!response.ok) throw new Error("Titan-Beam Bridge Failed");
+
+                const contentLength = response.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength, 10) : 0;
+                let loaded = 0;
+
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error("ReadableStream not supported");
+
+                const chunks: Uint8Array[] = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    chunks.push(value);
+                    loaded += value.length;
+
+                    if (total > 0) {
+                        setDownloadProgress(Math.floor((loaded / total) * 100));
+                    }
+                }
+
+                const blob = new Blob(chunks, { type: 'audio/m4a' });
+                const blobUrl = URL.createObjectURL(blob);
+                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
+
+                // Cleanup
+                setTimeout(() => {
+                    URL.revokeObjectURL(blobUrl);
+                    setHubStatus('ready');
+                    setDownloadProgress(0);
+                }, 3000);
+            } catch (e) {
+                console.error("Titan-Beam Failure:", e);
+                setHubStatus('fallback');
+            }
+        } else {
+            // Video still uses direct handover due to memory constraints on 100MB+ blobs
+            const pipeUrl = `/api/download?id=${currentTrack.id}&type=video&pipe=true`;
+            triggerLink(pipeUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`);
+            setTimeout(() => setHubStatus('ready'), 3000);
+        }
     };
 
     if (!currentTrack) return null;
@@ -391,7 +440,22 @@ const Player = () => {
                                                 {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
                                             </>
                                         )}
-                                        {hubStatus === 'tunneling' && "Omni-Tunnel Active: Hyper-Piping through Authorized Bridge..."}
+                                        {hubStatus === 'tunneling' && (
+                                            <div className="w-full space-y-2">
+                                                <p>Titan-Beam Active: Bridging Secure Stream via Authorized Handshake...</p>
+                                                {downloadProgress > 0 && (
+                                                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-purple-500 transition-all duration-300"
+                                                            style={{ width: `${downloadProgress}%` }}
+                                                        />
+                                                    </div>
+                                                )}
+                                                <p className="text-[10px] text-purple-400 animate-pulse">
+                                                    {downloadProgress > 0 ? `Streaming Fragmented Binary Data: ${downloadProgress}%` : "Establishing persistent identity tunnel..."}
+                                                </p>
+                                            </div>
+                                        )}
                                         {extractionLayer === 'verifying' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
                                         {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
@@ -474,7 +538,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v20.0 Omni-Tunnel
+                                Mellofy Ultra-Resilience Fleet v21.0 Titan-Beam
                             </p>
                         </div>
                     </div>

@@ -201,31 +201,38 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    // V20 OMNI-TUNNEL: Identity-Preserving Server-Side Pipe
+    // V21 TITAN-BEAM: Persistent Identity Tunnel & Stream Protection
     if (pipe) {
         try {
-            console.log(`Hyper-Piping: ${videoId} (${type})`);
+            console.log(`Titan-Beam Bridging: ${videoId} (${type})`);
             const ytdl = require("@distube/ytdl-core");
-            // Perform InnerTube lookup with authorized headers
+
+            // Titan-Beam: Authorized Handshake with randomized human signals
             const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                requestOptions: { headers: GET_GHOST_HEADERS(true) }
+                requestOptions: {
+                    headers: {
+                        ...GET_GHOST_HEADERS(true),
+                        "X-YouTube-Identity": Math.random().toString(36).substring(2, 12)
+                    }
+                }
             });
 
             const format = type === "audio"
                 ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
                 : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.hasVideo && f.hasAudio) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
 
-            if (!format?.url) throw new Error("No format found for piping");
+            if (!format?.url) throw new Error("No format found for Titan-Beam");
 
-            // V20: Preserve Mobile-Elite Identity for Binary Transfer
+            // V21: Persistent Identity Forwarding with Titan-Headers
             const streamResponse = await fetch(format.url, {
                 headers: {
                     ...GET_GHOST_HEADERS(true),
-                    "Range": "bytes=0-"
+                    "Range": "bytes=0-",
+                    "Connection": "keep-alive"
                 }
             });
 
-            if (!streamResponse.ok) throw new Error("Failed to fetch binary tunnel");
+            if (!streamResponse.ok) throw new Error("Titan-Beam binary handshake failed");
 
             const headers = new Headers();
             const sourceContentType = streamResponse.headers.get("Content-Type");
@@ -234,15 +241,15 @@ export async function GET(request: NextRequest) {
             headers.set("Content-Type", sourceContentType || (type === "audio" ? "audio/mp4" : "video/mp4"));
             headers.set("Content-Disposition", `attachment; filename="${info.videoDetails.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
 
-            // V20: Mandatory Content-Length for browser stability
             if (sourceLength) headers.set("Content-Length", sourceLength);
             headers.set("Accept-Ranges", "bytes");
-            headers.set("Cache-Control", "no-cache");
+            headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+            headers.set("X-Titan-Beam", "active");
 
             return new NextResponse(streamResponse.body, { headers });
         } catch (e) {
-            console.error("Omni-Tunnel Error:", e);
-            return NextResponse.json({ error: "Hyper-Tunnel Interrupted." }, { status: 500 });
+            console.error("Titan-Beam Interrupted:", e);
+            return NextResponse.json({ error: "Titan-Beam connection reset." }, { status: 500 });
         }
     }
 
