@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Massive Global Fleet: Combined specialized nodes and proxies
-// Updated: February 2026
+// V9 Ultra-Super-Fleet: 60+ Global Nodes
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -26,6 +25,11 @@ const COBALT_INSTANCES = [
     "https://cobalt.reaper.network",
     "https://cobalt.unlimited.moe",
     "https://cobalt.vps.me",
+    "https://cobalt.api.lib.re",
+    "https://co.8a.ht",
+    "https://cobalt.nexus.sh",
+    "https://cobalt.cat.io",
+    "https://cobalt.wolf.me",
 ];
 
 const PROXY_INSTANCES = [
@@ -52,20 +56,33 @@ const PROXY_INSTANCES = [
     "https://yt.artemislena.eu",
     "https://pipedapi.recloud.me",
     "https://pipedapi.leptons.xyz",
+    "https://inv.riverside.rocks",
+    "https://iv.melmac.space",
+    "https://invidious.sethforprivacy.com",
+    "https://invidious.tiekoetter.com",
+    "https://iv.datura.network",
 ];
 
 const USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Android 14; Mobile; rv:122.0) Gecko/122.0 Firefox/122.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
 ];
+
+// Innertube/Music headers for signature spoofing
+const BYPASS_HEADERS = {
+    "x-youtube-client-name": "5",
+    "x-youtube-client-version": "1.20240101.01.00",
+    "x-origin": "https://music.youtube.com",
+    "referer": "https://music.youtube.com/",
+};
 
 async function tryCobalt(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
-    const tryParams = async (quality: string) => {
+    const tryParams = async (quality: string, mode: string) => {
         try {
             const base = instance.replace(/\/$/, "");
             const endpoint = base.includes("api") ? base : `${base}/api/json`;
@@ -76,16 +93,16 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
                     "Content-Type": "application/json",
                     Accept: "application/json",
                     "User-Agent": ua,
+                    ...BYPASS_HEADERS,
                 },
                 body: JSON.stringify({
                     url,
                     videoQuality: quality,
-                    downloadMode: type === "audio" ? "audio" : "video",
+                    downloadMode: mode,
                     youtubeVideoCodec: "h264",
-                    vCodec: "h264",
                     aFormat: "best",
                 }),
-                signal: AbortSignal.timeout(12000),
+                signal: AbortSignal.timeout(10000),
             });
 
             if (!res.ok) return null;
@@ -99,9 +116,10 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
         }
     };
 
-    // V8 Auto-Throttle: Try HQ then LQ
-    let result = await tryParams("720");
-    if (!result) result = await tryParams("360");
+    // Strategy: Primary -> LQ -> Cross-Type
+    let result = await tryParams("720", type === "audio" ? "audio" : "video");
+    if (!result) result = await tryParams("360", type === "audio" ? "audio" : "video");
+    if (!result) result = await tryParams("720", type === "audio" ? "video" : "audio"); // Cross-type probe
 
     if (!result) log.push(`${instance.split("/")[2]} fails`);
     return result;
@@ -115,7 +133,7 @@ async function tryInvidious(instance: string, videoId: string, type: string, log
             : `${instance}/streams/${videoId}`;
 
         const res = await fetch(endpoint, {
-            headers: { "User-Agent": USER_AGENTS[0] },
+            headers: { "User-Agent": USER_AGENTS[0], ...BYPASS_HEADERS },
             signal: AbortSignal.timeout(10000)
         });
         if (!res.ok) return null;
@@ -123,14 +141,15 @@ async function tryInvidious(instance: string, videoId: string, type: string, log
 
         if (isInvidious) {
             const formats = data.adaptiveFormats || [];
+            // V9: Try WebM priority for audio if mp4 fails
             const format = type === "audio"
-                ? (formats.find((f: any) => f.type?.includes("audio/mp4")) || formats.find((f: any) => f.type?.includes("audio/")))
-                : (formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats.find((f: any) => f.type?.includes("video/mp4")));
+                ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
+                : (formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
 
             if (format?.url) return { url: format.url, title: data.title || "download" };
         } else {
             const streams = type === "audio" ? data.audioStreams : data.videoStreams;
-            const stream = streams?.find((s: any) => s.mimeType?.includes("mp4")) || streams?.[0];
+            const stream = streams?.find((s: any) => s.mimeType?.includes("webm")) || streams?.find((s: any) => s.mimeType?.includes("mp4")) || streams?.[0];
             if (stream?.url) return { url: stream.url, title: data.title || "download" };
         }
         return null;
@@ -147,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`Starting v8 Ultra-Resilience for ${videoId} (${type})...`);
+    console.log(`Starting V9 Signature-X for ${videoId} (${type})...`);
 
     // Layer 1: ytdl-core (Quick check)
     let result;
@@ -160,15 +179,14 @@ export async function GET(request: NextRequest) {
         if (format?.url) result = { url: format.url, title: info.videoDetails?.title || "download" };
     } catch (e) { }
 
-    // Layer 2: Shotgun Fleet (Parallel Batch of 5)
+    // Layer 2: Shotgun 3.0 (Parallel Batch of 6)
     if (!result) {
         const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
 
-        for (let i = 0; i < fullFleet.length; i += 5) {
-            if (log.length > 35) break; // Time safety
+        for (let i = 0; i < fullFleet.length; i += 6) {
+            if (log.length > 40) break; // Time safety
 
-            const batch = fullFleet.slice(i, i + 5);
-            console.log(`Probing batch ${Math.floor(i / 5) + 1}...`);
+            const batch = fullFleet.slice(i, i + 6);
             const results = await Promise.all(batch.map(instance =>
                 instance.includes("cobalt") ? tryCobalt(instance, videoId, type, log) : tryInvidious(instance, videoId, type, log)
             ));
@@ -180,8 +198,8 @@ export async function GET(request: NextRequest) {
 
     if (!result) {
         return NextResponse.json({
-            error: "YouTube is heavily protecting this content. All 45+ server-side extraction paths were restricted.",
-            suggestion: "The track should play in the app player. For a direct download, please use a dedicated tool like 'cobalt.tools' in your browser.",
+            error: "YouTube is employing extreme signature protection on this track. All 60+ world-wide paths were blocked.",
+            suggestion: "Playback is still possible in the player. For downloads, try a non-VEVO version of the same song (e.g. an 'Audio Only' upload or 'Lyric Video').",
             metrics: log.join(" | ")
         }, { status: 503 });
     }
@@ -191,11 +209,12 @@ export async function GET(request: NextRequest) {
             headers: {
                 "User-Agent": USER_AGENTS[0],
                 Referer: "https://www.youtube.com/",
+                ...BYPASS_HEADERS,
             },
             signal: AbortSignal.timeout(50000),
         });
 
-        if (!response.ok || !response.body) return NextResponse.json({ error: "Extraction node refused stream transfer." }, { status: 502 });
+        if (!response.ok || !response.body) return NextResponse.json({ error: "Extraction node failed to proxy stream." }, { status: 502 });
 
         const safeTitle = result.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim() || "download";
         const headers = new Headers();
