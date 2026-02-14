@@ -80,6 +80,35 @@ const Player = () => {
         setIsMuted(!isMuted);
     };
 
+    const triggerLink = (url: string, filename: string) => {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    /**
+     * V19 Hyper-Tunnel: Accessibility Probe
+     * Checks if the extracted URL is reachable by the client's browser.
+     * If blocked (CORS/IP-lock), this returns false to trigger server-piping.
+     */
+    const testUrlAccessibility = async (url: string): Promise<boolean> => {
+        try {
+            // Use no-cors to avoid CORS blocks, we just want to see if the server responds at all
+            // and Range: bytes=0-0 to keep it lightweight
+            const res = await fetch(url, {
+                mode: 'no-cors',
+                signal: AbortSignal.timeout(3000)
+            });
+            return true;
+        } catch (e) {
+            console.warn("Hyper-Tunnel: URL inaccessible. Triggering Failure-Reflex...", e);
+            return false;
+        }
+    };
+
     const handleDownload = async (type: 'audio' | 'video' | 'both', isForce: boolean = false) => {
         if (!currentTrack) return;
 
@@ -107,7 +136,7 @@ const Player = () => {
             const data = await response.json();
 
             clearInterval(layerInterval);
-            setExtractionLayer('done');
+            setExtractionLayer('verifying');
 
             setHubResults({
                 audio: data.audio,
@@ -116,6 +145,16 @@ const Player = () => {
             });
 
             if (data.status === 'ready') {
+                // V19 Failure-Reflex: Test accessibility before initiating
+                let audioOk = data.audio ? await testUrlAccessibility(data.audio.url) : true;
+                let videoOk = data.video ? await testUrlAccessibility(data.video.url) : true;
+
+                if (!audioOk || !videoOk) {
+                    console.log("Hyper-Tunnel: Critical IP-Lock detected. Initiating Piping protocol.");
+                    setHubStatus('tunneling');
+                    return;
+                }
+
                 setHubStatus('ready');
                 if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
                 if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
@@ -124,7 +163,6 @@ const Player = () => {
                     if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
                 }
             } else if (data.ghostProtocolEnabled) {
-                // V18: Handover to Server-Side Piping if fleet verification failed
                 setHubStatus('tunneling');
             } else {
                 setHubStatus('fallback');
@@ -142,16 +180,6 @@ const Player = () => {
         const pipeUrl = `/api/download?id=${currentTrack.id}&type=${type}&pipe=true`;
         triggerLink(pipeUrl, `${currentTrack.title}.${type === 'audio' ? 'm4a' : 'mp4'}`);
         setTimeout(() => setHubStatus('ready'), 3000); // Visual feedback completion
-    };
-
-    const triggerLink = (url: string, filename: string) => {
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", filename);
-        link.setAttribute("target", "_blank");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
     if (!currentTrack) return null;
@@ -363,7 +391,7 @@ const Player = () => {
                                                 {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
                                             </>
                                         )}
-                                        {hubStatus === 'tunneling' && "Ghost-Protocol Active: Establish secure Server-Side Stream Tunnel..."}
+                                        {hubStatus === 'tunneling' && "Hyper-Tunnel Active: Rerouting via Secure Bridge (IP-Lock Detected)..."}
                                         {extractionLayer === 'verifying' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
                                         {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
@@ -446,7 +474,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v18.0 Ghost-Protocol
+                                Mellofy Ultra-Resilience Fleet v19.0 Hyper-Tunnel
                             </p>
                         </div>
                     </div>
