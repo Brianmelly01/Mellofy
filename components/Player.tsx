@@ -195,14 +195,16 @@ const Player = () => {
                 const reader = response.body?.getReader();
                 if (!reader) throw new Error("ReadableStream not supported");
 
-                const chunks: Uint8Array[] = [];
+                const chunks: any[] = [];
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    chunks.push(value);
-                    loaded += value.length;
+                    if (value) {
+                        chunks.push(value);
+                        loaded += value.length;
+                    }
 
                     if (total > 0) {
                         setDownloadProgress(Math.floor((loaded / total) * 100));
