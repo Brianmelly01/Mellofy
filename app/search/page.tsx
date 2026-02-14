@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import SearchInput from "@/components/SearchInput";
 import SearchContent from "@/app/search/components/SearchContent";
+import { searchYouTube } from "@/lib/actions";
 
 interface SearchProps {
     searchParams: Promise<{
@@ -11,8 +12,8 @@ interface SearchProps {
 const Search = async ({ searchParams }: SearchProps) => {
     const { title } = await searchParams;
 
-    // In a real app, we would fetch from YouTube API here based on title
-    // For now, we'll pass the title to a client component that will handle the search
+    // Fetch from YouTube API here based on title
+    const results = title ? await searchYouTube(title) : [];
 
     return (
         <div className="bg-neutral-900 rounded-lg h-full w-full overflow-hidden overflow-y-auto">
@@ -22,7 +23,7 @@ const Search = async ({ searchParams }: SearchProps) => {
                     <SearchInput />
                 </div>
             </Header>
-            <SearchContent term={title} />
+            <SearchContent results={results} term={title} />
         </div>
     );
 };

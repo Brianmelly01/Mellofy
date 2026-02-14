@@ -1,34 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { Play, Video, Music, MoreVertical } from "lucide-react";
-import { searchYouTube } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 
 interface SearchContentProps {
     term?: string;
+    results: Track[];
 }
 
-const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
-    const [results, setResults] = useState<Track[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+const SearchContent: React.FC<SearchContentProps> = ({ term, results }) => {
     const { setTrack, setPlaybackMode, setQueue } = usePlayerStore();
-
-    useEffect(() => {
-        const fetchResults = async () => {
-            if (!term) {
-                setResults([]);
-                return;
-            }
-            setIsLoading(true);
-            const data = await searchYouTube(term);
-            setResults(data as Track[]);
-            setIsLoading(false);
-        };
-
-        fetchResults();
-    }, [term]);
 
     const handlePlay = (track: Track, mode: 'audio' | 'video') => {
         setPlaybackMode(mode);
@@ -36,18 +18,18 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         setQueue(results);
     };
 
-    if (isLoading) {
-        return (
-            <div className="flex flex-col gap-y-2 w-full px-6 text-neutral-400 animate-pulse">
-                Searching for "{term}"...
-            </div>
-        );
-    }
-
     if (results.length === 0 && term) {
         return (
             <div className="flex flex-col gap-y-2 w-full px-6 text-neutral-400">
                 No results found for "{term}".
+            </div>
+        );
+    }
+
+    if (!term) {
+        return (
+            <div className="flex flex-col gap-y-2 w-full px-6 text-neutral-400">
+                Search for your favorite songs or artists.
             </div>
         );
     }
