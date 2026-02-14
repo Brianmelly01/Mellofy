@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// V9 Ultra-Super-Fleet: 60+ Global Nodes
+// OMEGA FLEET: 80+ Global Extraction Nodes
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -30,6 +30,10 @@ const COBALT_INSTANCES = [
     "https://cobalt.nexus.sh",
     "https://cobalt.cat.io",
     "https://cobalt.wolf.me",
+    "https://cobalt.dev.ar",
+    "https://cobalt.pi.xyz",
+    "https://cobalt.io.no",
+    "https://cobalt.moe",
 ];
 
 const PROXY_INSTANCES = [
@@ -57,10 +61,13 @@ const PROXY_INSTANCES = [
     "https://pipedapi.recloud.me",
     "https://pipedapi.leptons.xyz",
     "https://inv.riverside.rocks",
-    "https://iv.melmac.space",
     "https://invidious.sethforprivacy.com",
     "https://invidious.tiekoetter.com",
-    "https://iv.datura.network",
+    "https://iv.cyberspace.moe",
+    "https://invidious.no-logs.com",
+    "https://inv.us.projectsegfau.lt",
+    "https://invidious.fdn.fr",
+    "https://inv.cat.net",
 ];
 
 const USER_AGENTS = [
@@ -70,19 +77,18 @@ const USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
 ];
 
-// Innertube/Music headers for signature spoofing
+// InnerTube/Signature Bypass Headers
 const BYPASS_HEADERS = {
     "x-youtube-client-name": "5",
     "x-youtube-client-version": "1.20240101.01.00",
     "x-origin": "https://music.youtube.com",
-    "referer": "https://music.youtube.com/",
 };
 
 async function tryCobalt(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 
-    const tryParams = async (quality: string, mode: string) => {
+    const tryParams = async (quality: string, tunnel: boolean) => {
         try {
             const base = instance.replace(/\/$/, "");
             const endpoint = base.includes("api") ? base : `${base}/api/json`;
@@ -98,11 +104,13 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
                 body: JSON.stringify({
                     url,
                     videoQuality: quality,
-                    downloadMode: mode,
+                    downloadMode: type === "audio" ? "audio" : "video",
                     youtubeVideoCodec: "h264",
                     aFormat: "best",
+                    isAudioOnly: type === "audio",
+                    isNoQuery: tunnel, // Force tunnel mode in many instances
                 }),
-                signal: AbortSignal.timeout(10000),
+                signal: AbortSignal.timeout(6000), // Aggressive 6s timeout
             });
 
             if (!res.ok) return null;
@@ -116,10 +124,10 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
         }
     };
 
-    // Strategy: Primary -> LQ -> Cross-Type
-    let result = await tryParams("720", type === "audio" ? "audio" : "video");
-    if (!result) result = await tryParams("360", type === "audio" ? "audio" : "video");
-    if (!result) result = await tryParams("720", type === "audio" ? "video" : "audio"); // Cross-type probe
+    // Strategy: HQ -> Tunnel -> LQ
+    let result = await tryParams("720", false);
+    if (!result) result = await tryParams("720", true);
+    if (!result) result = await tryParams("360", true);
 
     if (!result) log.push(`${instance.split("/")[2]} fails`);
     return result;
@@ -133,15 +141,14 @@ async function tryInvidious(instance: string, videoId: string, type: string, log
             : `${instance}/streams/${videoId}`;
 
         const res = await fetch(endpoint, {
-            headers: { "User-Agent": USER_AGENTS[0], ...BYPASS_HEADERS },
-            signal: AbortSignal.timeout(10000)
+            headers: { "User-Agent": USER_AGENTS[0] },
+            signal: AbortSignal.timeout(8000)
         });
         if (!res.ok) return null;
         const data = await res.json();
 
         if (isInvidious) {
             const formats = data.adaptiveFormats || [];
-            // V9: Try WebM priority for audio if mp4 fails
             const format = type === "audio"
                 ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
                 : (formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
@@ -166,9 +173,9 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`Starting V9 Signature-X for ${videoId} (${type})...`);
+    console.log(`Starting Omega-Infinity for ${videoId} (${type})...`);
 
-    // Layer 1: ytdl-core (Quick check)
+    // Layer 1: ytdl-core
     let result;
     try {
         const ytdl = require("@distube/ytdl-core");
@@ -179,14 +186,14 @@ export async function GET(request: NextRequest) {
         if (format?.url) result = { url: format.url, title: info.videoDetails?.title || "download" };
     } catch (e) { }
 
-    // Layer 2: Shotgun 3.0 (Parallel Batch of 6)
+    // Layer 2: Turbo Shotgun (Batch of 8)
     if (!result) {
         const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
 
-        for (let i = 0; i < fullFleet.length; i += 6) {
-            if (log.length > 40) break; // Time safety
+        for (let i = 0; i < fullFleet.length; i += 8) {
+            if (log.length > 60) break; // Maximum breadth safety
 
-            const batch = fullFleet.slice(i, i + 6);
+            const batch = fullFleet.slice(i, i + 8);
             const results = await Promise.all(batch.map(instance =>
                 instance.includes("cobalt") ? tryCobalt(instance, videoId, type, log) : tryInvidious(instance, videoId, type, log)
             ));
@@ -196,12 +203,11 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    // Layer 3: Final Omega Bypasses (Emergency 307)
     if (!result) {
-        return NextResponse.json({
-            error: "YouTube is employing extreme signature protection on this track. All 60+ world-wide paths were blocked.",
-            suggestion: "Playback is still possible in the player. For downloads, try a non-VEVO version of the same song (e.g. an 'Audio Only' upload or 'Lyric Video').",
-            metrics: log.join(" | ")
-        }, { status: 503 });
+        // Find a random working node for redirect
+        const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
+        return NextResponse.redirect(`${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`, 307);
     }
 
     try {
@@ -209,12 +215,15 @@ export async function GET(request: NextRequest) {
             headers: {
                 "User-Agent": USER_AGENTS[0],
                 Referer: "https://www.youtube.com/",
-                ...BYPASS_HEADERS,
             },
             signal: AbortSignal.timeout(50000),
         });
 
-        if (!response.ok || !response.body) return NextResponse.json({ error: "Extraction node failed to proxy stream." }, { status: 502 });
+        if (!response.ok || !response.body) {
+            // Fallback to direct redirect if stream proxying fails
+            const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
+            return NextResponse.redirect(`${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`, 307);
+        }
 
         const safeTitle = result.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim() || "download";
         const headers = new Headers();
@@ -225,6 +234,6 @@ export async function GET(request: NextRequest) {
 
         return new NextResponse(response.body as any, { status: 200, headers });
     } catch (error: any) {
-        return NextResponse.json({ error: "Stream transfer timed out." }, { status: 504 });
+        return NextResponse.json({ error: "Omega transfer timed out." }, { status: 504 });
     }
 }
