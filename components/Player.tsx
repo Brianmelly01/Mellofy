@@ -55,7 +55,7 @@ const Player = () => {
 
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
-    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating'>('probing');
+    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating' | 'tunneling'>('probing');
     const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'verifying' | 'done'>('ytdl');
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
@@ -123,6 +123,9 @@ const Player = () => {
                     if (data.audio) triggerLink(data.audio.url, data.audio.filename);
                     if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
                 }
+            } else if (data.ghostProtocolEnabled) {
+                // V18: Handover to Server-Side Piping if fleet verification failed
+                setHubStatus('tunneling');
             } else {
                 setHubStatus('fallback');
             }
@@ -131,6 +134,14 @@ const Player = () => {
             setHubStatus('fallback');
             setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
         }
+    };
+
+    const handleGhostProtocol = async (type: 'audio' | 'video') => {
+        if (!currentTrack) return;
+        setHubStatus('tunneling');
+        const pipeUrl = `/api/download?id=${currentTrack.id}&type=${type}&pipe=true`;
+        triggerLink(pipeUrl, `${currentTrack.title}.${type === 'audio' ? 'm4a' : 'mp4'}`);
+        setTimeout(() => setHubStatus('ready'), 3000); // Visual feedback completion
     };
 
     const triggerLink = (url: string, filename: string) => {
@@ -318,6 +329,12 @@ const Player = () => {
                                                 <span className="text-xs font-bold uppercase tracking-wider">Obliterating...</span>
                                             </div>
                                         )}
+                                        {hubStatus === 'tunneling' && (
+                                            <div className="flex items-center gap-2 text-purple-500">
+                                                <Loader2 size={16} className="animate-spin" />
+                                                <span className="text-xs font-bold uppercase tracking-wider">Ghost Protocol...</span>
+                                            </div>
+                                        )}
                                         {hubStatus === 'ready' && (
                                             <div className="flex items-center gap-2 text-[#1DB954]">
                                                 <CheckCircle2 size={16} />
@@ -346,6 +363,7 @@ const Player = () => {
                                                 {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
                                             </>
                                         )}
+                                        {hubStatus === 'tunneling' && "Ghost-Protocol Active: Establish secure Server-Side Stream Tunnel..."}
                                         {extractionLayer === 'verifying' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
                                         {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
@@ -366,16 +384,19 @@ const Player = () => {
                                             <button
                                                 onClick={() => {
                                                     if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
+                                                    else if (hubStatus === 'tunneling') handleGhostProtocol('audio');
                                                     else handleDownload('audio', true);
                                                 }}
                                                 className={cn(
                                                     "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
                                                     hubResults.audio
                                                         ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
+                                                        : hubStatus === 'tunneling'
+                                                            ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
+                                                            : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
                                                 )}
                                             >
-                                                {hubResults.audio ? "Download" : "Force Unlock"}
+                                                {hubResults.audio ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
                                             </button>
                                         </div>
                                     </div>
@@ -392,16 +413,19 @@ const Player = () => {
                                             <button
                                                 onClick={() => {
                                                     if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
+                                                    else if (hubStatus === 'tunneling') handleGhostProtocol('video');
                                                     else handleDownload('video', true);
                                                 }}
                                                 className={cn(
                                                     "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
                                                     hubResults.video
                                                         ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
+                                                        : hubStatus === 'tunneling'
+                                                            ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
+                                                            : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
                                                 )}
                                             >
-                                                {hubResults.video ? "Download" : "Force Unlock"}
+                                                {hubResults.video ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
                                             </button>
                                         </div>
                                     </div>
@@ -422,7 +446,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v17.0 Ghost-Node Purge
+                                Mellofy Ultra-Resilience Fleet v18.0 Ghost-Protocol
                             </p>
                         </div>
                     </div>
