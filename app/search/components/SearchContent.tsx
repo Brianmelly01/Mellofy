@@ -1,23 +1,65 @@
 "use client";
 
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
-import { Play, Video, Music, MoreVertical } from "lucide-react";
+import { Play, Video, Music, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 interface SearchContentProps {
     term?: string;
-    results: Track[];
-    error?: string;
 }
 
-const SearchContent: React.FC<SearchContentProps> = ({ term, results, error }) => {
+const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     const { setTrack, setPlaybackMode, setQueue } = usePlayerStore();
+    const [results, setResults] = useState<Track[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        if (!term) {
+            setResults([]);
+            setError("");
+            return;
+        }
+
+        const fetchResults = async () => {
+            setLoading(true);
+            setError("");
+            try {
+                const res = await fetch(`/api/search?q=${encodeURIComponent(term)}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    setError(data.error || "Search failed.");
+                    setResults([]);
+                } else {
+                    setResults(data.results || []);
+                }
+            } catch (err: any) {
+                setError(err.message || "Network error.");
+                setResults([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchResults();
+    }, [term]);
 
     const handlePlay = (track: Track, mode: 'audio' | 'video') => {
         setPlaybackMode(mode);
         setTrack(track);
         setQueue(results);
     };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center w-full py-10 text-neutral-400">
+                <Loader2 className="animate-spin mr-2" size={20} />
+                Searching...
+            </div>
+        );
+    }
 
     if (error) {
         return (
@@ -31,7 +73,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term, results, error }) =
     if (results.length === 0 && term) {
         return (
             <div className="flex flex-col gap-y-2 w-full px-6 text-neutral-400">
-                No results found for "{term}".
+                No results found for &quot;{term}&quot;.
             </div>
         );
     }
