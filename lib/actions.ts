@@ -1,4 +1,12 @@
+
 "use server";
+
+import * as cheerio from "cheerio";
+// @ts-ignore
+import ytSearch from "yt-search";
+
+// Workaround for potential CJS/ESM interop issues
+const search = typeof ytSearch === 'function' ? ytSearch : (ytSearch as any).default || ytSearch;
 
 export async function searchYouTube(query: string) {
     if (!query || typeof query !== 'string') return [];
@@ -9,23 +17,8 @@ export async function searchYouTube(query: string) {
     console.log("[DEBUG] searchYouTube searching for:", trimmedQuery);
 
     try {
-        let ytSearch;
-        try {
-            // Try to require yt-search
-            ytSearch = require("yt-search");
-        } catch (e: any) {
-            console.error("[DEBUG] yt-search require failed:", e.message);
-            // If it fails with cheerio missing, we can't do much but report it
-            throw new Error(`Search library failed to load: ${e.message}`);
-        }
-
-        const searchFunc = typeof ytSearch === 'function' ? ytSearch : ytSearch.default || ytSearch;
-
-        if (typeof searchFunc !== 'function') {
-            throw new Error("yt-search library not loaded correctly");
-        }
-
-        const r = await searchFunc(trimmedQuery);
+        console.log("[DEBUG] Calling ytSearch...");
+        const r = await search(trimmedQuery);
 
         if (!r) {
             console.error("[DEBUG] ytSearch returned nothing");
