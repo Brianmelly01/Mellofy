@@ -5,13 +5,14 @@ export const maxDuration = 60;
 
 // Multiple Invidious/Piped instances for fallback
 const PROXY_INSTANCES = [
-    "https://inv.tux.pizza",
-    "https://invidious.privacyredirect.com",
-    "https://invidious.nerdvpn.de",
-    "https://iv.datura.network",
+    "https://invidious.ducks.party",
+    "https://inv.vern.cc",
+    "https://invidious.flokinet.to",
+    "https://iv.melmac.space",
     "https://pipedapi.kavin.rocks",
     "https://piped-api.lunar.icu",
-    "https://pipedapi.leptons.xyz",
+    "https://piped-api.garudalinux.org",
+    "https://api-piped.mha.fi",
 ];
 
 // Try Invidious API to get stream URL
@@ -23,7 +24,10 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
             const res = await fetch(`${instance}/api/v1/videos/${videoId}?local=true`, {
                 signal: AbortSignal.timeout(8000),
             });
-            if (!res.ok) return null;
+            if (!res.ok) {
+                console.warn(`Invidious instance ${instance} returned ${res.status} for ${videoId}`);
+                return null;
+            }
             const data = await res.json();
 
             const formats = data.adaptiveFormats || [];
@@ -37,30 +41,43 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
                     formats.find((f: any) => f.type?.startsWith("video/mp4"));
             }
 
-            if (!format?.url) return null;
+            if (!format?.url) {
+                console.warn(`Invidious instance ${instance} found no suitable format for ${videoId}`);
+                return null;
+            }
             return { url: format.url, title: data.title || "download" };
         } else {
             // Piped API
             const res = await fetch(`${instance}/streams/${videoId}`, {
                 signal: AbortSignal.timeout(8000),
             });
-            if (!res.ok) return null;
+            if (!res.ok) {
+                console.warn(`Piped instance ${instance} returned ${res.status} for ${videoId}`);
+                return null;
+            }
             const data = await res.json();
 
             let streams;
             if (type === "audio") {
                 streams = data.audioStreams || [];
                 const stream = streams.find((s: any) => s.mimeType?.includes("mp4")) || streams[0];
-                if (!stream?.url) return null;
+                if (!stream?.url) {
+                    console.warn(`Piped instance ${instance} found no suitable audio stream for ${videoId}`);
+                    return null;
+                }
                 return { url: stream.url, title: data.title || "download" };
             } else {
                 streams = data.videoStreams || [];
                 const stream = streams.find((s: any) => s.mimeType?.includes("mp4") && s.videoOnly === false) || streams[0];
-                if (!stream?.url) return null;
+                if (!stream?.url) {
+                    console.warn(`Piped instance ${instance} found no suitable video stream for ${videoId}`);
+                    return null;
+                }
                 return { url: stream.url, title: data.title || "download" };
             }
         }
-    } catch {
+    } catch (err: any) {
+        console.error(`Error trying instance ${instance}:`, err.message || err);
         return null;
     }
 }
@@ -70,7 +87,17 @@ async function tryYtdlCore(videoId: string, type: string): Promise<{ url: string
     try {
         const ytdl = require("@distube/ytdl-core");
         const url = `https://www.youtube.com/watch?v=${videoId}`;
-        const info = await ytdl.getInfo(url);
+
+        // Add basic options to possibly avoid some restrictions
+        const options = {
+            requestOptions: {
+                headers: {
+                    Cookie: "", // Add if we had some
+                }
+            }
+        };
+
+        const info = await ytdl.getInfo(url, options);
 
         let format;
         if (type === "audio") {
@@ -83,7 +110,8 @@ async function tryYtdlCore(videoId: string, type: string): Promise<{ url: string
 
         if (!format?.url) return null;
         return { url: format.url, title: info.videoDetails?.title || "download" };
-    } catch {
+    } catch (err: any) {
+        console.warn(`ytdl-core failed for ${videoId}:`, err.message || err);
         return null;
     }
 }
@@ -97,20 +125,27 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
     }
 
+    console.log(`Starting download for ${videoId} (${type})...`);
+
     // Strategy 1: Try @distube/ytdl-core first
     let result = await tryYtdlCore(videoId, type);
 
     // Strategy 2: Try proxy instances as fallback
     if (!result) {
+        console.log(`ytdl-core failed, attempting fallbacks via ${PROXY_INSTANCES.length} proxy instances...`);
         for (const instance of PROXY_INSTANCES) {
             result = await tryInvidious(instance, videoId, type);
-            if (result) break;
+            if (result) {
+                console.log(`Successfully found stream via proxy: ${instance}`);
+                break;
+            }
         }
     }
 
     if (!result) {
+        console.error(`All download strategies failed for ${videoId}`);
         return NextResponse.json(
-            { error: "Unable to process download. YouTube is currently restricting access from this server. Please try again later." },
+            { error: "Unable to process download. YouTube is currently restricting access from this server. Please try again later or try a different video." },
             { status: 503 }
         );
     }
