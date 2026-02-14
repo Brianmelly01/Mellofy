@@ -3,7 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Multiple Invidious/Piped instances for fallback
+// Cobalt instances for robust fallback
+const COBALT_INSTANCES = [
+    "https://cobalt.canine.tools",
+    "https://cobalt.meowing.de",
+    "https://cobalt.sh",
+];
+
+// Multiple Invidious/Piped instances for secondary fallback
 const PROXY_INSTANCES = [
     "https://invidious.ducks.party",
     "https://inv.vern.cc",
@@ -14,6 +21,48 @@ const PROXY_INSTANCES = [
     "https://piped-api.garudalinux.org",
     "https://api-piped.mha.fi",
 ];
+
+// Try Cobalt API to get download URL
+async function tryCobalt(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    try {
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        const res = await fetch(instance, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+            },
+            body: JSON.stringify({
+                url,
+                videoQuality: "720",
+                filenameStyle: "pretty",
+                downloadMode: type === "audio" ? "audio" : "video",
+                youtubeVideoCodec: "h264",
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+
+        if (!res.ok) {
+            console.warn(`Cobalt instance ${instance} returned ${res.status}`);
+            return null;
+        }
+
+        const data = await res.json();
+        if (data.status === "error") {
+            console.warn(`Cobalt instance ${instance} error: ${data.text}`);
+            return null;
+        }
+
+        if (data.url) {
+            return { url: data.url, title: data.filename || "download" };
+        }
+
+        return null;
+    } catch (err: any) {
+        console.error(`Error trying Cobalt instance ${instance}:`, err.message || err);
+        return null;
+    }
+}
 
 // Try Invidious API to get stream URL
 async function tryInvidious(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
@@ -130,9 +179,21 @@ export async function GET(request: NextRequest) {
     // Strategy 1: Try @distube/ytdl-core first
     let result = await tryYtdlCore(videoId, type);
 
-    // Strategy 2: Try proxy instances as fallback
+    // Strategy 2: Try Cobalt instances as primary fallback
     if (!result) {
-        console.log(`ytdl-core failed, attempting fallbacks via ${PROXY_INSTANCES.length} proxy instances...`);
+        console.log(`ytdl-core failed, attempting fallbacks via ${COBALT_INSTANCES.length} Cobalt instances...`);
+        for (const instance of COBALT_INSTANCES) {
+            result = await tryCobalt(instance, videoId, type);
+            if (result) {
+                console.log(`Successfully found stream via Cobalt: ${instance}`);
+                break;
+            }
+        }
+    }
+
+    // Strategy 3: Try proxy instances as secondary fallback
+    if (!result) {
+        console.log(`Cobalt failed, attempting fallbacks via ${PROXY_INSTANCES.length} proxy instances...`);
         for (const instance of PROXY_INSTANCES) {
             result = await tryInvidious(instance, videoId, type);
             if (result) {
