@@ -3,11 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Cobalt instances for robust fallback
+// Cobalt instances for robust fallback (using community instances)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
     "https://cobalt.sh",
+    "https://co.eepy.moe",
+    "https://cobalt.red",
+    "https://cobalt.best",
 ];
 
 // Multiple Invidious/Piped instances for secondary fallback
@@ -39,7 +42,7 @@ async function tryCobalt(instance: string, videoId: string, type: string): Promi
                 downloadMode: type === "audio" ? "audio" : "video",
                 youtubeVideoCodec: "h264",
             }),
-            signal: AbortSignal.timeout(10000),
+            signal: AbortSignal.timeout(15000), // Increased timeout for extraction
         });
 
         if (!res.ok) {
@@ -49,7 +52,8 @@ async function tryCobalt(instance: string, videoId: string, type: string): Promi
 
         const data = await res.json();
         if (data.status === "error") {
-            console.warn(`Cobalt instance ${instance} error: ${data.text}`);
+            const errorText = data.text || "Unknown error";
+            console.warn(`Cobalt instance ${instance} error: ${errorText}`);
             return null;
         }
 
