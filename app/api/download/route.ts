@@ -3,14 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Cobalt instances for robust fallback (using community instances)
+// Cobalt instances for robust fallback (Expanded community list)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
-    "https://cobalt.sh",
     "https://co.eepy.moe",
     "https://cobalt.red",
     "https://cobalt.best",
+    "https://cobalt.03c8.net",
+    "https://cobalt.miz.icu",
+    "https://cobalt.inst.moe",
+    "https://cobalt.vps.moe",
 ];
 
 // Multiple Invidious/Piped instances for secondary fallback
@@ -23,53 +26,61 @@ const PROXY_INSTANCES = [
     "https://piped-api.lunar.icu",
     "https://piped-api.garudalinux.org",
     "https://api-piped.mha.fi",
+    "https://invidious.nerdvpn.de",
+    "https://iv.datura.network",
+    "https://invidious.privacyredirect.com",
 ];
 
 // Try Cobalt API to get download URL
-async function tryCobalt(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
-    try {
-        const url = `https://www.youtube.com/watch?v=${videoId}`;
-        const res = await fetch(instance, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-            },
-            body: JSON.stringify({
-                url,
-                videoQuality: "720",
-                filenameStyle: "pretty",
-                downloadMode: type === "audio" ? "audio" : "video",
-                youtubeVideoCodec: "h264",
-            }),
-            signal: AbortSignal.timeout(15000), // Increased timeout for extraction
-        });
+async function tryCobalt(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-        if (!res.ok) {
-            console.warn(`Cobalt instance ${instance} returned ${res.status}`);
+    const tryEndpoint = async (endpoint: string) => {
+        try {
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                },
+                body: JSON.stringify({
+                    url,
+                    videoQuality: "720",
+                    filenameStyle: "pretty",
+                    downloadMode: type === "audio" ? "audio" : "video",
+                    youtubeVideoCodec: "h264",
+                }),
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (!res.ok) {
+                log.push(`Cobalt ${endpoint} -> HTTP ${res.status}`);
+                return null;
+            }
+
+            const data = await res.json();
+            if (data.status === "error") {
+                log.push(`Cobalt ${endpoint} -> Error: ${data.text || "Unknown"}`);
+                return null;
+            }
+
+            if (data.url) return { url: data.url, title: data.filename || "download" };
+            return null;
+        } catch (err: any) {
+            log.push(`Cobalt ${endpoint} -> Failed: ${err.message || "Timeout"}`);
             return null;
         }
+    };
 
-        const data = await res.json();
-        if (data.status === "error") {
-            const errorText = data.text || "Unknown error";
-            console.warn(`Cobalt instance ${instance} error: ${errorText}`);
-            return null;
-        }
-
-        if (data.url) {
-            return { url: data.url, title: data.filename || "download" };
-        }
-
-        return null;
-    } catch (err: any) {
-        console.error(`Error trying Cobalt instance ${instance}:`, err.message || err);
-        return null;
+    let result = await tryEndpoint(instance);
+    if (!result) {
+        result = await tryEndpoint(`${instance.endsWith("/") ? instance : instance + "/"}api/json`);
     }
+    return result;
 }
 
 // Try Invidious API to get stream URL
-async function tryInvidious(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+async function tryInvidious(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
     try {
         const isInvidious = !instance.includes("piped");
 
@@ -78,7 +89,7 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
                 signal: AbortSignal.timeout(8000),
             });
             if (!res.ok) {
-                console.warn(`Invidious instance ${instance} returned ${res.status} for ${videoId}`);
+                log.push(`Invidious ${instance} -> HTTP ${res.status}`);
                 return null;
             }
             const data = await res.json();
@@ -95,7 +106,7 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
             }
 
             if (!format?.url) {
-                console.warn(`Invidious instance ${instance} found no suitable format for ${videoId}`);
+                log.push(`Invidious ${instance} -> No suitable format`);
                 return null;
             }
             return { url: format.url, title: data.title || "download" };
@@ -105,7 +116,7 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
                 signal: AbortSignal.timeout(8000),
             });
             if (!res.ok) {
-                console.warn(`Piped instance ${instance} returned ${res.status} for ${videoId}`);
+                log.push(`Piped ${instance} -> HTTP ${res.status}`);
                 return null;
             }
             const data = await res.json();
@@ -115,7 +126,7 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
                 streams = data.audioStreams || [];
                 const stream = streams.find((s: any) => s.mimeType?.includes("mp4")) || streams[0];
                 if (!stream?.url) {
-                    console.warn(`Piped instance ${instance} found no suitable audio stream for ${videoId}`);
+                    log.push(`Piped ${instance} -> No audio stream`);
                     return null;
                 }
                 return { url: stream.url, title: data.title || "download" };
@@ -123,14 +134,14 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
                 streams = data.videoStreams || [];
                 const stream = streams.find((s: any) => s.mimeType?.includes("mp4") && s.videoOnly === false) || streams[0];
                 if (!stream?.url) {
-                    console.warn(`Piped instance ${instance} found no suitable video stream for ${videoId}`);
+                    log.push(`Piped ${instance} -> No video stream`);
                     return null;
                 }
                 return { url: stream.url, title: data.title || "download" };
             }
         }
     } catch (err: any) {
-        console.error(`Error trying instance ${instance}:`, err.message || err);
+        log.push(`${instance} -> Exception: ${err.message || "Unknown"}`);
         return null;
     }
 }
@@ -140,17 +151,7 @@ async function tryYtdlCore(videoId: string, type: string): Promise<{ url: string
     try {
         const ytdl = require("@distube/ytdl-core");
         const url = `https://www.youtube.com/watch?v=${videoId}`;
-
-        // Add basic options to possibly avoid some restrictions
-        const options = {
-            requestOptions: {
-                headers: {
-                    Cookie: "", // Add if we had some
-                }
-            }
-        };
-
-        const info = await ytdl.getInfo(url, options);
+        const info = await ytdl.getInfo(url);
 
         let format;
         if (type === "audio") {
@@ -164,7 +165,7 @@ async function tryYtdlCore(videoId: string, type: string): Promise<{ url: string
         if (!format?.url) return null;
         return { url: format.url, title: info.videoDetails?.title || "download" };
     } catch (err: any) {
-        console.warn(`ytdl-core failed for ${videoId}:`, err.message || err);
+        console.warn(`ytdl-core failed: ${err.message}`);
         return null;
     }
 }
@@ -173,6 +174,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
     const type = searchParams.get("type") || "audio";
+    const log: string[] = [];
 
     if (!videoId) {
         return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
@@ -180,56 +182,49 @@ export async function GET(request: NextRequest) {
 
     console.log(`Starting download for ${videoId} (${type})...`);
 
-    // Strategy 1: Try @distube/ytdl-core first
+    // Layer 1: ytdl-core
     let result = await tryYtdlCore(videoId, type);
 
-    // Strategy 2: Try Cobalt instances as primary fallback
+    // Layer 2: Cobalt Fleet
     if (!result) {
-        console.log(`ytdl-core failed, attempting fallbacks via ${COBALT_INSTANCES.length} Cobalt instances...`);
+        console.log(`ytdl-core failed, trying Cobalt fleet...`);
         for (const instance of COBALT_INSTANCES) {
-            result = await tryCobalt(instance, videoId, type);
-            if (result) {
-                console.log(`Successfully found stream via Cobalt: ${instance}`);
-                break;
-            }
+            result = await tryCobalt(instance, videoId, type, log);
+            if (result) break;
         }
     }
 
-    // Strategy 3: Try proxy instances as secondary fallback
+    // Layer 3: Proxy Fleet
     if (!result) {
-        console.log(`Cobalt failed, attempting fallbacks via ${PROXY_INSTANCES.length} proxy instances...`);
+        console.log(`Cobalt failed, trying Proxy fleet...`);
         for (const instance of PROXY_INSTANCES) {
-            result = await tryInvidious(instance, videoId, type);
-            if (result) {
-                console.log(`Successfully found stream via proxy: ${instance}`);
-                break;
-            }
+            result = await tryInvidious(instance, videoId, type, log);
+            if (result) break;
         }
     }
 
     if (!result) {
-        console.error(`All download strategies failed for ${videoId}`);
+        console.error(`Download failed for ${videoId}. Log:`, log.join(" | "));
         return NextResponse.json(
-            { error: "Unable to process download. YouTube is currently restricting access from this server. Please try again later or try a different video." },
+            {
+                error: "Unable to process download. YouTube is currently restricting access from this server. Please try again later or try a different video.",
+                diagnostics: log.slice(0, 10)
+            },
             { status: 503 }
         );
     }
 
     try {
-        // Proxy the stream
         const response = await fetch(result.url, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 Referer: "https://www.youtube.com/",
             },
-            signal: AbortSignal.timeout(30000),
+            signal: AbortSignal.timeout(45000),
         });
 
         if (!response.ok || !response.body) {
-            return NextResponse.json(
-                { error: "Failed to download the stream." },
-                { status: 502 }
-            );
+            return NextResponse.json({ error: "Failed to download stream" }, { status: 502 });
         }
 
         const ext = type === "audio" ? "m4a" : "mp4";
@@ -240,16 +235,11 @@ export async function GET(request: NextRequest) {
         headers.set("Content-Type", type === "audio" ? "audio/mp4" : "video/mp4");
 
         const contentLength = response.headers.get("Content-Length");
-        if (contentLength) {
-            headers.set("Content-Length", contentLength);
-        }
+        if (contentLength) headers.set("Content-Length", contentLength);
 
         return new NextResponse(response.body as any, { status: 200, headers });
     } catch (error: any) {
-        console.error("Download proxy error:", error);
-        return NextResponse.json(
-            { error: "Download stream timed out. Please try again." },
-            { status: 504 }
-        );
+        console.error("Stream transfer error:", error);
+        return NextResponse.json({ error: "Stream timed out" }, { status: 504 });
     }
 }
