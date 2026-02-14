@@ -1,37 +1,222 @@
 "use client";
 
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
-import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minimize2, Maximize2 } from "lucide-react";
 
-const ReactPlayer = dynamic(() => import("react-player"), { ssr: false }) as any;
+declare global {
+    interface Window {
+        YT: any;
+        onYouTubeIframeAPIReady: () => void;
+    }
+}
+
+let ytApiLoaded = false;
+let ytApiLoading = false;
+const ytApiCallbacks: (() => void)[] = [];
+
+function loadYouTubeAPI(): Promise<void> {
+    return new Promise((resolve) => {
+        if (ytApiLoaded && window.YT?.Player) {
+            resolve();
+            return;
+        }
+
+        ytApiCallbacks.push(resolve);
+
+        if (ytApiLoading) return;
+        ytApiLoading = true;
+
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+
+        window.onYouTubeIframeAPIReady = () => {
+            ytApiLoaded = true;
+            ytApiCallbacks.forEach((cb) => cb());
+            ytApiCallbacks.length = 0;
+        };
+    });
+}
 
 const PlayerContent = () => {
-    const { currentTrack, isPlaying, volume, playNext, setProgress, playbackMode } = usePlayerStore();
-    const [isMounted, setIsMounted] = useState(false);
-    const [isVideoExpanded, setIsVideoExpanded] = useState(true);
+    const {
+        currentTrack,
+        isPlaying,
+        volume,
+        playNext,
+        setProgress,
+        playbackMode,
+        togglePlay,
+    } = usePlayerStore();
 
+    const [isVideoExpanded, setIsVideoExpanded] = useState(true);
+    const [apiReady, setApiReady] = useState(false);
+
+    const videoPlayerRef = useRef<any>(null);
+    const audioPlayerRef = useRef<any>(null);
+    const videoContainerRef = useRef<HTMLDivElement>(null);
+    const audioContainerRef = useRef<HTMLDivElement>(null);
+    const progressInterval = useRef<NodeJS.Timeout | null>(null);
+    const lastTrackIdRef = useRef<string | null>(null);
+
+    // Load YouTube IFrame API
     useEffect(() => {
-        setIsMounted(true);
+        loadYouTubeAPI().then(() => setApiReady(true));
     }, []);
 
-    // Expand video panel when new video starts
+    // Create or update players when track changes
     useEffect(() => {
-        if (playbackMode === 'video') {
+        if (!apiReady || !currentTrack?.id) return;
+
+        const isNewTrack = lastTrackIdRef.current !== currentTrack.id;
+        lastTrackIdRef.current = currentTrack.id;
+
+        const isVideoMode = playbackMode === "video";
+
+        // Destroy the opposite player to avoid double audio
+        if (isVideoMode) {
+            if (audioPlayerRef.current) {
+                try { audioPlayerRef.current.destroy(); } catch { }
+                audioPlayerRef.current = null;
+            }
+        } else {
+            if (videoPlayerRef.current) {
+                try { videoPlayerRef.current.destroy(); } catch { }
+                videoPlayerRef.current = null;
+            }
+        }
+
+        if (isVideoMode && isVideoExpanded) {
+            // Create/update video player
+            if (videoPlayerRef.current && !isNewTrack) return;
+            if (videoPlayerRef.current) {
+                try { videoPlayerRef.current.destroy(); } catch { }
+            }
+
+            if (!videoContainerRef.current) return;
+            // Create a fresh div for the player
+            const div = document.createElement("div");
+            div.id = "yt-video-player";
+            videoContainerRef.current.innerHTML = "";
+            videoContainerRef.current.appendChild(div);
+
+            videoPlayerRef.current = new window.YT.Player("yt-video-player", {
+                videoId: currentTrack.id,
+                width: "100%",
+                height: "100%",
+                playerVars: {
+                    autoplay: 1,
+                    modestbranding: 1,
+                    rel: 0,
+                    playsinline: 1,
+                },
+                events: {
+                    onStateChange: (event: any) => {
+                        if (event.data === window.YT.PlayerState.ENDED) {
+                            playNext();
+                        }
+                    },
+                    onReady: (event: any) => {
+                        event.target.setVolume(volume * 100);
+                        event.target.playVideo();
+                    },
+                },
+            });
+        } else {
+            // Create/update audio-only player (hidden)
+            if (audioPlayerRef.current && !isNewTrack) return;
+            if (audioPlayerRef.current) {
+                try { audioPlayerRef.current.destroy(); } catch { }
+            }
+
+            if (!audioContainerRef.current) return;
+            const div = document.createElement("div");
+            div.id = "yt-audio-player";
+            audioContainerRef.current.innerHTML = "";
+            audioContainerRef.current.appendChild(div);
+
+            audioPlayerRef.current = new window.YT.Player("yt-audio-player", {
+                videoId: currentTrack.id,
+                width: "1",
+                height: "1",
+                playerVars: {
+                    autoplay: 1,
+                    modestbranding: 1,
+                    rel: 0,
+                    playsinline: 1,
+                },
+                events: {
+                    onStateChange: (event: any) => {
+                        if (event.data === window.YT.PlayerState.ENDED) {
+                            playNext();
+                        }
+                    },
+                    onReady: (event: any) => {
+                        event.target.setVolume(volume * 100);
+                        event.target.playVideo();
+                    },
+                },
+            });
+        }
+    }, [apiReady, currentTrack?.id, playbackMode, isVideoExpanded]);
+
+    // Sync play/pause state
+    useEffect(() => {
+        const player = videoPlayerRef.current || audioPlayerRef.current;
+        if (!player?.getPlayerState) return;
+
+        try {
+            const state = player.getPlayerState();
+            if (isPlaying && state !== window.YT.PlayerState.PLAYING) {
+                player.playVideo();
+            } else if (!isPlaying && state === window.YT.PlayerState.PLAYING) {
+                player.pauseVideo();
+            }
+        } catch { }
+    }, [isPlaying]);
+
+    // Sync volume
+    useEffect(() => {
+        const player = videoPlayerRef.current || audioPlayerRef.current;
+        try {
+            player?.setVolume?.(volume * 100);
+        } catch { }
+    }, [volume]);
+
+    // Progress tracking
+    useEffect(() => {
+        if (progressInterval.current) clearInterval(progressInterval.current);
+
+        progressInterval.current = setInterval(() => {
+            const player = videoPlayerRef.current || audioPlayerRef.current;
+            if (!player?.getCurrentTime || !player?.getDuration) return;
+
+            try {
+                const current = player.getCurrentTime();
+                const duration = player.getDuration();
+                if (duration > 0) {
+                    setProgress(current / duration);
+                }
+            } catch { }
+        }, 500);
+
+        return () => {
+            if (progressInterval.current) clearInterval(progressInterval.current);
+        };
+    }, [currentTrack?.id, playbackMode]);
+
+    // Expand video when switching to video mode
+    useEffect(() => {
+        if (playbackMode === "video") {
             setIsVideoExpanded(true);
         }
     }, [currentTrack?.id, playbackMode]);
 
-    if (!isMounted || !currentTrack) return null;
+    if (!currentTrack) return null;
 
-    const isVideoMode = playbackMode === 'video';
-
-    // Build the YouTube URL from the track ID for ReactPlayer
-    const youtubeUrl = currentTrack.id
-        ? `https://www.youtube.com/watch?v=${currentTrack.id}`
-        : currentTrack.url;
+    const isVideoMode = playbackMode === "video";
 
     return (
         <>
@@ -45,26 +230,11 @@ const PlayerContent = () => {
                         className="fixed bottom-24 right-6 z-40"
                     >
                         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl shadow-black/50 aspect-video w-[320px] md:w-[480px]">
-                            <ReactPlayer
-                                url={youtubeUrl}
-                                playing={isPlaying}
-                                volume={volume}
-                                onEnded={playNext}
-                                onProgress={(state: any) => setProgress(state.played)}
-                                width="100%"
-                                height="100%"
-                                controls={true}
-                                config={{
-                                    youtube: {
-                                        playerVars: {
-                                            autoplay: 1,
-                                            modestbranding: 1,
-                                            rel: 0,
-                                        },
-                                    },
-                                }}
+                            <div
+                                ref={videoContainerRef}
+                                className="w-full h-full"
                             />
-                            <div className="absolute top-2 right-2 flex gap-x-2">
+                            <div className="absolute top-2 right-2 flex gap-x-2 z-10">
                                 <button
                                     onClick={() => setIsVideoExpanded(false)}
                                     className="bg-black/60 p-1.5 rounded-full text-white hover:bg-black/80 transition backdrop-blur-md"
@@ -88,26 +258,9 @@ const PlayerContent = () => {
                 </button>
             )}
 
-            {/* Hidden audio-only player (for audio mode or when video is minimized) */}
-            <div className="hidden">
-                {(!isVideoMode || !isVideoExpanded) && (
-                    <ReactPlayer
-                        url={youtubeUrl}
-                        playing={isPlaying}
-                        volume={volume}
-                        onEnded={playNext}
-                        onProgress={(state: any) => setProgress(state.played)}
-                        width="0"
-                        height="0"
-                        config={{
-                            youtube: {
-                                playerVars: {
-                                    autoplay: 1,
-                                },
-                            },
-                        }}
-                    />
-                )}
+            {/* Hidden container for audio-only player */}
+            <div className="fixed -left-[9999px] top-0 w-[1px] h-[1px] overflow-hidden">
+                <div ref={audioContainerRef} />
             </div>
         </>
     );

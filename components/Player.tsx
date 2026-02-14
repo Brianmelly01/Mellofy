@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, Download, Video, Music, ChevronDown } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Repeat, Shuffle, Download, Video, Music } from "lucide-react";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
 import { cn } from "@/lib/utils";
 import PlayerContent from "./PlayerContent";
@@ -24,6 +24,18 @@ const Player = () => {
     const [prevVolume, setPrevVolume] = useState(volume);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+    const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+    // Close download menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+                setShowDownloadMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const toggleMute = () => {
         if (isMuted) {
@@ -44,8 +56,12 @@ const Player = () => {
             const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
 
             if (!response.ok) {
-                const data = await response.json();
-                alert(`Download failed: ${data.error || 'Unknown error'}`);
+                let errorMsg = "Download failed";
+                try {
+                    const data = await response.json();
+                    errorMsg = data.error || errorMsg;
+                } catch { }
+                alert(errorMsg);
                 return;
             }
 
@@ -139,7 +155,7 @@ const Player = () => {
                     </button>
 
                     {/* Download dropdown */}
-                    <div className="relative">
+                    <div className="relative" ref={downloadMenuRef}>
                         <button
                             onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                             disabled={isDownloading}
