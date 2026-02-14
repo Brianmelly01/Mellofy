@@ -55,8 +55,8 @@ const Player = () => {
 
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
-    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback'>('probing');
-    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'done'>('ytdl');
+    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating'>('probing');
+    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'done'>('ytdl');
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -80,27 +80,30 @@ const Player = () => {
         setIsMuted(!isMuted);
     };
 
-    const handleDownload = async (type: 'audio' | 'video' | 'both') => {
+    const handleDownload = async (type: 'audio' | 'video' | 'both', isForce: boolean = false) => {
         if (!currentTrack) return;
 
         setIsHubOpen(true);
-        setHubStatus('probing');
-        setExtractionLayer('ytdl');
+        setHubStatus(isForce ? 'obliterating' : 'probing');
+        setExtractionLayer(isForce ? 'mobile_elite' : 'ytdl');
         setHubResults({ audio: null, video: null, fallbackUrl: null });
         setShowDownloadMenu(false);
 
         // Simulation cycle for granular UX progress
-        const layers: ('ytdl' | 'cobalt' | 'shotgun')[] = ['ytdl', 'cobalt', 'shotgun'];
+        const layers: ('ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite')[] = isForce
+            ? ['mobile_elite', 'shotgun', 'cobalt']
+            : ['ytdl', 'cobalt', 'shotgun'];
+
         let currentLayerIndex = 0;
         const layerInterval = setInterval(() => {
             if (currentLayerIndex < layers.length - 1) {
                 currentLayerIndex++;
                 setExtractionLayer(layers[currentLayerIndex]);
             }
-        }, 1500);
+        }, isForce ? 1000 : 1500);
 
         try {
-            const response = await fetch(`/api/download?id=${currentTrack.id}&type=both`);
+            const response = await fetch(`/api/download?id=${currentTrack.id}&type=both${isForce ? '&force=true' : ''}`);
             const data = await response.json();
 
             clearInterval(layerInterval);
@@ -309,6 +312,12 @@ const Player = () => {
                                                 <span className="text-xs font-bold uppercase tracking-wider">Probing Fleet...</span>
                                             </div>
                                         )}
+                                        {hubStatus === 'obliterating' && (
+                                            <div className="flex items-center gap-2 text-amber-500">
+                                                <Shield size={16} className="animate-pulse" />
+                                                <span className="text-xs font-bold uppercase tracking-wider">Obliterating...</span>
+                                            </div>
+                                        )}
                                         {hubStatus === 'ready' && (
                                             <div className="flex items-center gap-2 text-[#1DB954]">
                                                 <CheckCircle2 size={16} />
@@ -330,6 +339,13 @@ const Player = () => {
                                                 {extractionLayer === 'shotgun' && "Probing 90+ verified worldwide proxy nodes..."}
                                             </>
                                         )}
+                                        {hubStatus === 'obliterating' && (
+                                            <>
+                                                {extractionLayer === 'mobile_elite' && "Switching to Android Music Mobile authorized bridge..."}
+                                                {extractionLayer === 'shotgun' && "Saturating signature decryptors via expanded shotgun batch..."}
+                                                {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
+                                            </>
+                                        )}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
                                         {hubStatus === 'fallback' && "Universal Signature detected. Handing over to Secure Mode window."}
                                     </p>
@@ -349,13 +365,13 @@ const Player = () => {
                                             <button
                                                 onClick={() => {
                                                     if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
-                                                    else handleDownload('audio');
+                                                    else handleDownload('audio', true);
                                                 }}
                                                 className={cn(
-                                                    "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition",
+                                                    "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
                                                     hubResults.audio
-                                                        ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse"
+                                                        ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
+                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
                                                 )}
                                             >
                                                 {hubResults.audio ? "Download" : "Force Unlock"}
@@ -375,13 +391,13 @@ const Player = () => {
                                             <button
                                                 onClick={() => {
                                                     if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
-                                                    else handleDownload('video');
+                                                    else handleDownload('video', true);
                                                 }}
                                                 className={cn(
-                                                    "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition",
+                                                    "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
                                                     hubResults.video
-                                                        ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse"
+                                                        ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
+                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
                                                 )}
                                             >
                                                 {hubResults.video ? "Download" : "Force Unlock"}
@@ -405,7 +421,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v15.0 Omni-Stream
+                                Mellofy Ultra-Resilience Fleet v16.0 Deep-Probe Elite
                             </p>
                         </div>
                     </div>

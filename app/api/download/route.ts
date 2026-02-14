@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET V15: Omni-Stream (InnerTube Emulation Layer)
+// OMEGA FLEET V16: Deep-Probe Elite (Mobile Bridge Overhaul)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -74,24 +74,24 @@ const STABLE_FALLBACKS = [
     "https://cobalt.best",
 ];
 
-// V15 Signature-Smasher (Advanced Emulation)
-const GET_OMNI_HEADERS = () => {
-    const userAgents = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    ];
+// V16 Mobile-Elite Headers (Android/iOS Bypass)
+const GET_ELITE_HEADERS = (isMobile: boolean = false) => {
+    const agents = isMobile
+        ? ["com.google.android.youtube/19.05.35 (Linux; U; Android 14; en_US; Pixel 8 Pro; Build/UQ1A.240205.004)"]
+        : ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"];
+
     return {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "User-Agent": userAgents[Math.floor(Math.random() * userAgents.length)],
-        "Sec-CH-UA-Platform": '"Windows"',
-        "Sec-Fetch-Site": "cross-site",
+        "User-Agent": agents[0],
+        "X-YouTube-Client-Name": isMobile ? "21" : "1",
+        "X-YouTube-Client-Version": isMobile ? "2.20240224.0.0" : "2.20240224.01.00",
     };
 };
 
-async function tryCobalt(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string; quality?: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const headers = GET_OMNI_HEADERS();
+    const headers = GET_ELITE_HEADERS(force);
 
     const tryParams = async (quality: string, tunnel: boolean) => {
         try {
@@ -109,26 +109,28 @@ async function tryCobalt(instance: string, videoId: string, type: string): Promi
                     aFormat: "best",
                     isNoQuery: tunnel,
                 }),
-                signal: AbortSignal.timeout(7000),
+                signal: AbortSignal.timeout(force ? 12000 : 7000),
             });
 
             if (!res.ok) return null;
             const data = await res.json();
             if (data.status === "error") return null;
-            if (data.url) return { url: data.url, title: data.filename || "download" };
-            if (data.picker) return { url: data.picker[0]?.url, title: data.filename || "download" };
+            if (data.url) return { url: data.url, title: data.filename || "download", quality };
+            if (data.picker) return { url: data.picker[0]?.url, title: data.filename || "download", quality };
             return null;
         } catch (e) {
             return null;
         }
     };
 
-    let result = await tryParams("720", true);
-    if (!result) result = await tryParams("360", true);
+    // V16: In force mode, we prioritize quality, but scale down if needed
+    let result = await tryParams("1080", true);
+    if (!result) result = await tryParams("720", true);
+    if (!result && !force) result = await tryParams("360", true);
     return result;
 }
 
-async function tryInvidious(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
     try {
         const isInvidious = !instance.includes("piped");
         const endpoint = isInvidious
@@ -136,8 +138,8 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
             : `${instance}/streams/${videoId}`;
 
         const res = await fetch(endpoint, {
-            headers: { "User-Agent": GET_OMNI_HEADERS()["User-Agent"] },
-            signal: AbortSignal.timeout(8000)
+            headers: { "User-Agent": GET_ELITE_HEADERS(force)["User-Agent"] },
+            signal: AbortSignal.timeout(force ? 15000 : 8000)
         });
         if (!res.ok) return null;
         const data = await res.json();
@@ -146,12 +148,12 @@ async function tryInvidious(instance: string, videoId: string, type: string): Pr
             const formats = data.adaptiveFormats || [];
             const format = type === "audio"
                 ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
-                : (formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
+                : (formats.find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
 
             if (format?.url) return { url: format.url, title: data.title || "download" };
         } else {
             const streams = type === "audio" ? data.audioStreams : data.videoStreams;
-            const stream = streams?.find((s: any) => s.mimeType?.includes("webm")) || streams?.find((s: any) => s.mimeType?.includes("mp4")) || (streams ? streams[0] : null);
+            const stream = streams?.find((s: any) => s.quality === (force ? "1080p" : "720p")) || streams?.find((s: any) => s.mimeType?.includes("mp4")) || (streams ? streams[0] : null);
             if (stream?.url) return { url: stream.url, title: data.title || "download" };
         }
         return null;
@@ -164,41 +166,41 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
     const type = searchParams.get("type") || "both";
+    const force = searchParams.get("force") === "true";
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`V15 Omni-Stream Probe: ${videoId}`);
+    console.log(`V16 Deep-Probe: ${videoId} (Force: ${force})`);
 
     const probeType = async (t: string) => {
         let result;
-        // Layer 1: Signature-Smasher (ytdl-core with InnerTube)
+        // Layer 1: Signature-Obliterator (InnerTube Mobile Emulation)
         try {
             const ytdl = require("@distube/ytdl-core");
-            // V15: Using Music Desktop client emulation
             const options = {
                 requestOptions: {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-                        "Accept-Language": "en-US,en;q=0.9",
-                    }
+                    headers: GET_ELITE_HEADERS(force)
                 }
             };
             const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, options);
-            const format = t === "audio"
+            const formatSelection = t === "audio"
                 ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
-                : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.hasVideo && f.hasAudio) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
+                : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
 
-            if (format?.url) result = { url: format.url, title: info.videoDetails?.title || "download" };
+            if (formatSelection?.url) result = { url: formatSelection.url, title: info.videoDetails?.title || "download" };
         } catch (e) { }
 
-        // Layer 2: Omega Shotgun
+        // Layer 2: Elite Shotgun (Expanded batch size for force)
         if (!result) {
             const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-            for (let i = 0; i < fullFleet.length; i += 8) {
-                if (i > 96) break;
-                const batch = fullFleet.slice(i, i + 8);
+            const batchSize = force ? 15 : 8;
+            const limit = force ? 120 : 64;
+
+            for (let i = 0; i < fullFleet.length; i += batchSize) {
+                if (i > limit) break;
+                const batch = fullFleet.slice(i, i + batchSize);
                 const results = await Promise.all(batch.map(instance =>
-                    instance.includes("cobalt") ? tryCobalt(instance, videoId, t) : tryInvidious(instance, videoId, t)
+                    instance.includes("cobalt") ? tryCobalt(instance, videoId, t, force) : tryInvidious(instance, videoId, t, force)
                 ));
                 result = results.find(r => r !== null);
                 if (result) break;
@@ -224,7 +226,7 @@ export async function GET(request: NextRequest) {
     if (result) return NextResponse.json({ downloadUrl: result.url, filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}` });
 
     return NextResponse.json({
-        error: "Universal Signature detection triggered.",
+        error: "Signature Obliteration failed. Handing over to Secure Acquisition...",
         fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`
     });
 }
