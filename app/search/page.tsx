@@ -14,12 +14,15 @@ const Search = async ({ searchParams }: SearchProps) => {
     const { title } = await searchParams;
 
     let results: Track[] = [];
+    let errorMessage = "";
+
     try {
         if (title) {
             results = await searchYouTube(title);
         }
     } catch (error: any) {
         console.error("Search page error:", error);
+        errorMessage = error.message || "Failed to fetch search results.";
     }
 
     return (
@@ -30,7 +33,7 @@ const Search = async ({ searchParams }: SearchProps) => {
                     <SearchInput />
                 </div>
             </Header>
-            <SearchContent results={results} term={title} />
+            <SearchContent results={results} term={title} error={errorMessage} />
         </div>
     );
 };

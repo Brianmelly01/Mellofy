@@ -7,9 +7,10 @@ import { cn } from "@/lib/utils";
 interface SearchContentProps {
     term?: string;
     results: Track[];
+    error?: string;
 }
 
-const SearchContent: React.FC<SearchContentProps> = ({ term, results }) => {
+const SearchContent: React.FC<SearchContentProps> = ({ term, results, error }) => {
     const { setTrack, setPlaybackMode, setQueue } = usePlayerStore();
 
     const handlePlay = (track: Track, mode: 'audio' | 'video') => {
@@ -17,6 +18,15 @@ const SearchContent: React.FC<SearchContentProps> = ({ term, results }) => {
         setTrack(track);
         setQueue(results);
     };
+
+    if (error) {
+        return (
+            <div className="flex flex-col gap-y-2 w-full px-6 text-red-500 bg-red-500/10 p-4 rounded-lg m-6 border border-red-500/20">
+                <p className="font-semibold">Search Error</p>
+                <p className="text-sm opacity-80">{error}</p>
+            </div>
+        );
+    }
 
     if (results.length === 0 && term) {
         return (

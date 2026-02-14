@@ -7,20 +7,28 @@ export async function searchYouTube(query: string) {
     if (!trimmedQuery) return [];
 
     try {
-        // Use dynamic require inside the server action to isolate dependencies
-        // and avoid issues with module-level imports in some environments.
+        console.log(`[SERVER] Requiring yt-search for query: "${trimmedQuery}"`);
         const ytSearch = require("yt-search");
+
+        if (!ytSearch) {
+            throw new Error("Module 'yt-search' returned null/undefined.");
+        }
+
         const searchFunc = typeof ytSearch === 'function' ? ytSearch : ytSearch.default || ytSearch;
 
         if (typeof searchFunc !== 'function') {
-            console.error("yt-search library not loaded correctly");
-            return [];
+            const keys = Object.keys(ytSearch);
+            throw new Error(`yt-search library not loaded correctly. Export type: ${typeof searchFunc}. Keys: ${keys.join(", ")}`);
         }
 
         const r = await searchFunc(trimmedQuery);
 
         if (!r) {
-            return [];
+            throw new Error("yt-search returned a null/undefined response.");
+        }
+
+        if (!r.videos) {
+            throw new Error(`Response missing 'videos' property. Keys: ${Object.keys(r).join(", ")}`);
         }
 
         const videos = (r.videos || []).slice(0, 15).map((video: any) => ({
@@ -42,10 +50,10 @@ export async function searchYouTube(query: string) {
             type: 'playlist' as const,
         }));
 
+        console.log(`[SERVER] Found ${videos.length} videos and ${playlists.length} playlists`);
         return [...videos, ...playlists];
     } catch (error: any) {
         console.error("YouTube search error:", error);
-        // Returning an empty array instead of throwing keeps the page alive (avoids 500)
-        return [];
+        throw new Error(`Search failed: ${error.message || "Unknown error"}`);
     }
 }
