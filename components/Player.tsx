@@ -152,16 +152,21 @@ const Player = () => {
 
                 if (!audioOk || !videoOk) {
                     console.log("Hyper-Tunnel: Critical IP-Lock detected. Initiating Piping protocol.");
-                    setHubStatus('tunneling');
-                    return;
-                }
-
-                setHubStatus('ready');
-                if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
-                if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
-                if (type === 'both') {
-                    if (data.audio) triggerLink(data.audio.url, data.audio.filename);
-                    if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
+                    // V23: Pulsar-Core Auto-Escalation
+                    // If a signature block is detected, automatically escalate to Zero-Signature Tunnel
+                    setExtractionLayer('mobile_elite');
+                    setHubStatus('obliterating');
+                    setTimeout(() => {
+                        handleGhostProtocol(type === 'both' ? 'audio' : type);
+                    }, 1500);
+                } else {
+                    setHubStatus('ready');
+                    if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
+                    if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
+                    if (type === 'both') {
+                        if (data.audio) triggerLink(data.audio.url, data.audio.filename);
+                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
+                    }
                 }
             } else if (data.ghostProtocolEnabled) {
                 setHubStatus('tunneling');
@@ -403,9 +408,14 @@ const Player = () => {
                                             </div>
                                         )}
                                         {hubStatus === 'obliterating' && (
-                                            <div className="flex items-center gap-2 text-amber-500">
-                                                <Shield size={16} className="animate-pulse" />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Obliterating...</span>
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="flex items-center gap-2 text-red-500">
+                                                    <AlertTriangle className="w-4 h-4 animate-pulse" />
+                                                    <span className="font-bold tracking-wider">SIGNATURE DETECTED</span>
+                                                </div>
+                                                <p className="text-[11px] text-white/60 animate-pulse">
+                                                    Escalating to Level 3 Pulsar-Core: Simulating active human playback session...
+                                                </p>
                                             </div>
                                         )}
                                         {hubStatus === 'tunneling' && (
@@ -444,7 +454,7 @@ const Player = () => {
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-2">
-                                                <p>Nebula-Bridge Active: Establishing Triple-Hop Secure Relay...</p>
+                                                <p>Pulsar-Core Active: Simulating Human Handshake & Authorized Session...</p>
                                                 {downloadProgress > 0 && (
                                                     <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                                                         <div
@@ -540,7 +550,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v22.0 Nebula-Bridge
+                                Mellofy Ultra-Resilience Fleet v23.0 Pulsar-Core
                             </p>
                         </div>
                     </div>
