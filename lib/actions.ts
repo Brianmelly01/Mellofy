@@ -1,16 +1,14 @@
 "use server";
 
-// @ts-ignore
-import ytSearch from "yt-search";
-
-// Workaround for potential CJS/ESM interop issues
-const search = typeof ytSearch === 'function' ? ytSearch : (ytSearch as any).default || ytSearch;
-
 export async function searchYouTube(query: string) {
     console.log("[DEBUG] searchYouTube called with query:", query);
     if (!query) return [];
 
     try {
+        // Use dynamic require to avoid issues with top-level imports in server actions
+        const ytSearch = require("yt-search");
+        const search = typeof ytSearch === 'function' ? ytSearch : (ytSearch as any).default || ytSearch;
+
         console.log("[DEBUG] Calling ytSearch...");
         const r = await search(query);
         console.log("[DEBUG] ytSearch success, found", r?.videos?.length, "videos");
