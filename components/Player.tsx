@@ -55,13 +55,25 @@ const Player = () => {
         try {
             const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
 
+            // Check if response is JSON (fallback mode)
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                const data = await response.json();
+                if (data.fallbackUrl) {
+                    // Open the acquisition portal in a new tab
+                    window.open(data.fallbackUrl, '_blank');
+                    setIsDownloading(false);
+                    return;
+                }
+                if (!response.ok) {
+                    alert(data.error || "Download failed");
+                    setIsDownloading(false);
+                    return;
+                }
+            }
+
             if (!response.ok) {
-                let errorMsg = "Download failed";
-                try {
-                    const data = await response.json();
-                    errorMsg = data.error || errorMsg;
-                } catch { }
-                alert(errorMsg);
+                alert("Download failed. The server might be temporarily restricted.");
                 return;
             }
 
@@ -76,7 +88,7 @@ const Player = () => {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            alert('Download failed. Please try again.');
+            alert('Download failed. Secure Acquisition Mode failed to initialize.');
         } finally {
             setIsDownloading(false);
         }

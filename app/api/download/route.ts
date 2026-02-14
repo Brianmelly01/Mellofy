@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET: 80+ Global Extraction Nodes
+// OMEGA FLEET: 80+ Global Extraction Nodes (V11 Optimized)
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -32,7 +32,6 @@ const COBALT_INSTANCES = [
     "https://cobalt.wolf.me",
     "https://cobalt.dev.ar",
     "https://cobalt.pi.xyz",
-    "https://cobalt.io.no",
     "https://cobalt.moe",
 ];
 
@@ -74,15 +73,7 @@ const USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
 ];
-
-// InnerTube/Signature Bypass Headers
-const BYPASS_HEADERS = {
-    "x-youtube-client-name": "5",
-    "x-youtube-client-version": "1.20240101.01.00",
-    "x-origin": "https://music.youtube.com",
-};
 
 async function tryCobalt(instance: string, videoId: string, type: string, log: string[]): Promise<{ url: string; title: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
@@ -99,7 +90,6 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
                     "Content-Type": "application/json",
                     Accept: "application/json",
                     "User-Agent": ua,
-                    ...BYPASS_HEADERS,
                 },
                 body: JSON.stringify({
                     url,
@@ -107,10 +97,9 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
                     downloadMode: type === "audio" ? "audio" : "video",
                     youtubeVideoCodec: "h264",
                     aFormat: "best",
-                    isAudioOnly: type === "audio",
-                    isNoQuery: tunnel, // Force tunnel mode in many instances
+                    isNoQuery: tunnel,
                 }),
-                signal: AbortSignal.timeout(6000), // Aggressive 6s timeout
+                signal: AbortSignal.timeout(6000),
             });
 
             if (!res.ok) return null;
@@ -124,7 +113,6 @@ async function tryCobalt(instance: string, videoId: string, type: string, log: s
         }
     };
 
-    // Strategy: HQ -> Tunnel -> LQ
     let result = await tryParams("720", false);
     if (!result) result = await tryParams("720", true);
     if (!result) result = await tryParams("360", true);
@@ -173,7 +161,7 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    console.log(`Starting Omega-Infinity for ${videoId} (${type})...`);
+    console.log(`Starting V11 Zero-Bound for ${videoId} (${type})...`);
 
     // Layer 1: ytdl-core
     let result;
@@ -191,7 +179,7 @@ export async function GET(request: NextRequest) {
         const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
 
         for (let i = 0; i < fullFleet.length; i += 8) {
-            if (log.length > 60) break; // Maximum breadth safety
+            if (log.length > 70) break;
 
             const batch = fullFleet.slice(i, i + 8);
             const results = await Promise.all(batch.map(instance =>
@@ -203,11 +191,15 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // Layer 3: Final Omega Bypasses (Emergency 307)
+    // Layer 3: Zero-Bound Handshake (Fallback JSON)
     if (!result) {
-        // Find a random working node for redirect
         const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
-        return NextResponse.redirect(`${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`, 307);
+        const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+
+        return NextResponse.json({
+            error: "YouTube is employing extreme signature protection on this track. Switching to Secure Acquisition Mode...",
+            fallbackUrl
+        }, { status: 200 }); // Return 200 so the frontend can read the body
     }
 
     try {
@@ -220,9 +212,9 @@ export async function GET(request: NextRequest) {
         });
 
         if (!response.ok || !response.body) {
-            // Fallback to direct redirect if stream proxying fails
             const safeNode = COBALT_INSTANCES[Math.floor(Math.random() * COBALT_INSTANCES.length)];
-            return NextResponse.redirect(`${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`, 307);
+            const fallbackUrl = `${safeNode}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+            return NextResponse.json({ error: "Stream proxy failed. Switching to Secure Acquisition Mode...", fallbackUrl }, { status: 200 });
         }
 
         const safeTitle = result.title.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim() || "download";
