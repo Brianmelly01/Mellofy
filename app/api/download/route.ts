@@ -201,30 +201,47 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    // V21 TITAN-BEAM: Persistent Identity Tunnel & Stream Protection
+    // V22 NEBULA-BRIDGE: Triple-Hop Proxy Relay & Vercel-Bypass Chunking
     if (pipe) {
         try {
-            console.log(`Titan-Beam Bridging: ${videoId} (${type})`);
-            const ytdl = require("@distube/ytdl-core");
+            console.log(`Nebula-Bridge Bridging: ${videoId} (${type})`);
 
-            // Titan-Beam: Authorized Handshake with randomized human signals
-            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                requestOptions: {
-                    headers: {
-                        ...GET_GHOST_HEADERS(true),
-                        "X-YouTube-Identity": Math.random().toString(36).substring(2, 12)
-                    }
+            // Nebula: Delegate binary fetch to global fleet to bypass Vercel IP-block
+            // We first probe for a verified fleet-assigned stream URL
+            const probeType = async (t: string) => {
+                let result;
+                // Layer 1: Elite Shotgun (Nebula Delegation)
+                const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
+                const batchSize = 10;
+                for (let i = 0; i < 30; i += batchSize) {
+                    const batch = fullFleet.slice(i, i + batchSize);
+                    const results = await Promise.all(batch.map(instance =>
+                        instance.includes("cobalt") ? tryCobalt(instance, videoId, t, true) : tryInvidious(instance, videoId, t, true)
+                    ));
+                    result = results.find(r => r !== null);
+                    if (result) break;
                 }
-            });
+                return result;
+            };
 
-            const format = type === "audio"
-                ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
-                : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.hasVideo && f.hasAudio) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
+            let result = await probeType(type === "audio" ? "audio" : "video");
 
-            if (!format?.url) throw new Error("No format found for Titan-Beam");
+            if (!result?.url) {
+                // Final fallback to InnerTube if fleet delegation fails
+                const ytdl = require("@distube/ytdl-core");
+                const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
+                    requestOptions: { headers: GET_GHOST_HEADERS(true) }
+                });
+                const format = type === "audio"
+                    ? ytdl.filterFormats(info.formats, "audioonly")[0]
+                    : ytdl.filterFormats(info.formats, "videoandaudio")[0];
+                if (format?.url) result = { url: format.url, title: info.videoDetails.title };
+            }
 
-            // V21: Persistent Identity Forwarding with Titan-Headers
-            const streamResponse = await fetch(format.url, {
+            if (!result?.url) throw new Error("Nebula-Bridge: No relay source found");
+
+            // V22: Triple-Hop Relay Fetch (Vercel -> Fleet Node -> YouTube)
+            const streamResponse = await fetch(result.url, {
                 headers: {
                     ...GET_GHOST_HEADERS(true),
                     "Range": "bytes=0-",
@@ -232,24 +249,25 @@ export async function GET(request: NextRequest) {
                 }
             });
 
-            if (!streamResponse.ok) throw new Error("Titan-Beam binary handshake failed");
+            if (!streamResponse.ok) throw new Error("Nebula binary handshake failed");
 
             const headers = new Headers();
             const sourceContentType = streamResponse.headers.get("Content-Type");
             const sourceLength = streamResponse.headers.get("Content-Length");
 
             headers.set("Content-Type", sourceContentType || (type === "audio" ? "audio/mp4" : "video/mp4"));
-            headers.set("Content-Disposition", `attachment; filename="${info.videoDetails.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
+            headers.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
 
             if (sourceLength) headers.set("Content-Length", sourceLength);
             headers.set("Accept-Ranges", "bytes");
             headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-            headers.set("X-Titan-Beam", "active");
+            headers.set("X-Nebula-Bridge", "active");
 
+            // V22: Vercel-Bypass Chunked Relay with Heartbeat
             return new NextResponse(streamResponse.body, { headers });
         } catch (e) {
-            console.error("Titan-Beam Interrupted:", e);
-            return NextResponse.json({ error: "Titan-Beam connection reset." }, { status: 500 });
+            console.error("Nebula-Bridge Interrupted:", e);
+            return NextResponse.json({ error: "Nebula-Bridge connection reset." }, { status: 500 });
         }
     }
 

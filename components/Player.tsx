@@ -186,7 +186,7 @@ const Player = () => {
                 const pipeUrl = `/api/download?id=${currentTrack.id}&type=audio&pipe=true`;
                 const response = await fetch(pipeUrl);
 
-                if (!response.ok) throw new Error("Titan-Beam Bridge Failed");
+                if (!response.ok) throw new Error("Nebula-Bridge Connection Reset");
 
                 const contentLength = response.headers.get('content-length');
                 const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -444,7 +444,7 @@ const Player = () => {
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-2">
-                                                <p>Titan-Beam Active: Bridging Secure Stream via Authorized Handshake...</p>
+                                                <p>Nebula-Bridge Active: Establishing Triple-Hop Secure Relay...</p>
                                                 {downloadProgress > 0 && (
                                                     <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                                                         <div
@@ -540,7 +540,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v21.0 Titan-Beam
+                                Mellofy Ultra-Resilience Fleet v22.0 Nebula-Bridge
                             </p>
                         </div>
                     </div>
