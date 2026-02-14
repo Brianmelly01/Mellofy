@@ -1,3 +1,5 @@
+"use server";
+
 export async function searchYouTube(query: string) {
     if (!query || typeof query !== 'string') return [];
 
@@ -7,8 +9,16 @@ export async function searchYouTube(query: string) {
     console.log("[DEBUG] searchYouTube searching for:", trimmedQuery);
 
     try {
-        const ytSearch = require("yt-search");
-        // Ensure we handle both default and named exports
+        let ytSearch;
+        try {
+            // Try to require yt-search
+            ytSearch = require("yt-search");
+        } catch (e: any) {
+            console.error("[DEBUG] yt-search require failed:", e.message);
+            // If it fails with cheerio missing, we can't do much but report it
+            throw new Error(`Search library failed to load: ${e.message}`);
+        }
+
         const searchFunc = typeof ytSearch === 'function' ? ytSearch : ytSearch.default || ytSearch;
 
         if (typeof searchFunc !== 'function') {
@@ -45,7 +55,6 @@ export async function searchYouTube(query: string) {
         return [...videos, ...playlists];
     } catch (error: any) {
         console.error("[DEBUG] YouTube search error:", error);
-        // Throwing here so the Page component can catch it and show the error message
         throw new Error(`YouTube Search failed: ${error.message || "Unknown error"}`);
     }
 }
