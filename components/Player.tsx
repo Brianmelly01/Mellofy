@@ -193,61 +193,75 @@ const Player = () => {
         }
     };
 
-    const handleGhostProtocol = async (type: 'audio' | 'video') => {
+    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both') => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
         setDownloadProgress(0);
 
-        // Titan-Beam: Front-end Bridge-Fetch (Audio)
-        if (type === 'audio') {
-            try {
-                const pipeUrl = `/api/download?id=${currentTrack.id}&type=audio&pipe=true`;
-                const response = await fetch(pipeUrl);
+        const bridgeFetch = async (t: 'audio' | 'video') => {
+            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true`;
+            const response = await fetch(pipeUrl);
+            if (!response.ok) throw new Error(`Super-Nova Bridge Failed for ${t}`);
 
-                if (!response.ok) throw new Error("Nebula-Bridge Connection Reset");
+            const contentLength = response.headers.get('content-length');
+            const total = contentLength ? parseInt(contentLength, 10) : 0;
+            let loaded = 0;
 
-                const contentLength = response.headers.get('content-length');
-                const total = contentLength ? parseInt(contentLength, 10) : 0;
-                let loaded = 0;
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error("ReadableStream not supported");
+            const chunks: any[] = [];
 
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error("ReadableStream not supported");
-
-                const chunks: any[] = [];
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    if (value) {
-                        chunks.push(value);
-                        loaded += value.length;
-                    }
-
-                    if (total > 0) {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) {
+                    chunks.push(value);
+                    loaded += value.length;
+                    if (total > 0 && type !== 'both') {
                         setDownloadProgress(Math.floor((loaded / total) * 100));
                     }
                 }
+            }
 
-                const blob = new Blob(chunks, { type: 'audio/m4a' });
-                const blobUrl = URL.createObjectURL(blob);
+            const blob = new Blob(chunks, { type: t === 'audio' ? 'audio/m4a' : 'video/mp4' });
+            return URL.createObjectURL(blob);
+        };
+
+        try {
+            if (type === 'both') {
+                setDownloadProgress(25); // Initial sync
+                const [audioUrl, videoUrl] = await Promise.all([bridgeFetch('audio'), bridgeFetch('video')]);
+                setDownloadProgress(100);
+                triggerLink(audioUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
+                setTimeout(() => triggerLink(videoUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`), 1000);
+
+                setTimeout(() => {
+                    URL.revokeObjectURL(audioUrl);
+                    URL.revokeObjectURL(videoUrl);
+                    setHubStatus('ready');
+                    setDownloadProgress(0);
+                }, 5000);
+            } else if (type === 'audio') {
+                const blobUrl = await bridgeFetch('audio');
                 triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
-
-                // Cleanup
                 setTimeout(() => {
                     URL.revokeObjectURL(blobUrl);
                     setHubStatus('ready');
                     setDownloadProgress(0);
                 }, 3000);
-            } catch (e) {
-                console.error("Titan-Beam Failure:", e);
-                setHubStatus('fallback');
+            } else {
+                // Video single fetch
+                const blobUrl = await bridgeFetch('video');
+                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`);
+                setTimeout(() => {
+                    URL.revokeObjectURL(blobUrl);
+                    setHubStatus('ready');
+                    setDownloadProgress(0);
+                }, 3000);
             }
-        } else {
-            // Video still uses direct handover due to memory constraints on 100MB+ blobs
-            const pipeUrl = `/api/download?id=${currentTrack.id}&type=video&pipe=true`;
-            triggerLink(pipeUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`);
-            setTimeout(() => setHubStatus('ready'), 3000);
+        } catch (e) {
+            console.error("Super-Nova Failure:", e);
+            setHubStatus('fallback');
         }
     };
 
@@ -414,53 +428,28 @@ const Player = () => {
                                 <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                                     <div className="flex items-center justify-between mb-4">
                                         <span className="text-sm text-white/60 font-medium">Status</span>
-                                        {hubStatus === 'probing' && (
-                                            <div className="flex items-center gap-2 text-[#1DB954]">
-                                                <Loader2 size={16} className="animate-spin" />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Probing Fleet...</span>
-                                            </div>
-                                        )}
-                                        {hubStatus === 'obliterating' && (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="flex items-center gap-2 text-red-500">
-                                                    <AlertTriangle className="w-4 h-4 animate-pulse" />
-                                                    <span className="font-bold tracking-wider">SIGNATURE DETECTED</span>
-                                                </div>
-                                                <p className="text-[11px] text-white/60 animate-pulse">
-                                                    Escalating to Level 3 Pulsar-Core: Simulating active human playback session...
-                                                </p>
-                                            </div>
-                                        )}
-                                        {hubStatus === 'tunneling' && (
-                                            <div className="flex items-center gap-2 text-purple-500">
-                                                <Loader2 size={16} className="animate-spin" />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Ghost Protocol...</span>
-                                            </div>
-                                        )}
-                                        {hubStatus === 'ready' && (
-                                            <div className="flex items-center gap-2 text-[#1DB954]">
-                                                <CheckCircle2 size={16} />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Streams Ready</span>
-                                            </div>
-                                        )}
                                         {hubStatus === 'fallback' && (
                                             <div className="flex items-center gap-2 text-amber-500">
                                                 <AlertTriangle size={16} />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Signature Detected</span>
+                                                <span className="text-xs font-bold uppercase tracking-wider">Acquisition Restricted</span>
                                             </div>
                                         )}
                                     </div>
                                     <p className="text-xs text-white/40 leading-relaxed italic">
                                         {hubStatus === 'probing' && (
-                                            <>
+                                            <span className="flex items-center gap-2">
+                                                <Loader2 size={14} className="animate-spin text-[#1DB954]" />
                                                 {extractionLayer === 'ytdl' && "Deciphering YouTube Signature logic (InnerTube Layer)..."}
                                                 {extractionLayer === 'cobalt' && "Injecting stream into Global Cobalt Network..."}
                                                 {extractionLayer === 'shotgun' && "Probing verified worldwide proxy nodes..."}
-                                            </>
+                                            </span>
                                         )}
                                         {hubStatus === 'obliterating' && (
                                             <div className="w-full space-y-2">
-                                                <p className="text-[#1DB954] font-medium">Bypassing Signature Block: Establishing Pulsar Handshake...</p>
+                                                <p className="text-[#1DB954] font-medium flex items-center gap-2">
+                                                    <AlertTriangle size={14} className="animate-pulse" />
+                                                    Signature Detected: Establishing Pulsar Handshake...
+                                                </p>
                                                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                                                     <div
                                                         className="h-full bg-[#1DB954] transition-all duration-300"
@@ -474,103 +463,113 @@ const Player = () => {
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-2">
-                                                <p>Pulsar-Core Active: Simulating Human Handshake & Authorized Session...</p>
-                                                {downloadProgress > 0 && (
-                                                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-purple-500 transition-all duration-300"
-                                                            style={{ width: `${downloadProgress}%` }}
-                                                        />
-                                                    </div>
-                                                )}
+                                                <p className="flex items-center gap-2">
+                                                    <Loader2 size={14} className="animate-spin text-purple-500" />
+                                                    Super-Nova Bridge: Simulating Human Handshake & Authorized Session...
+                                                </p>
+                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-purple-500 transition-all duration-300"
+                                                        style={{ width: `${downloadProgress || 25}%` }}
+                                                    />
+                                                </div>
                                                 <p className="text-[10px] text-purple-400 animate-pulse">
-                                                    {downloadProgress > 0 ? `Streaming Fragmented Binary Data: ${downloadProgress}%` : "Establishing persistent identity tunnel..."}
+                                                    Streaming Fragmented Binary Data: {downloadProgress > 0 ? `${downloadProgress}%` : "Negotiating Relay..."}
                                                 </p>
                                             </div>
                                         )}
-                                        {extractionLayer === 'verifying' && hubStatus === 'probing' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
-                                        {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
-                                        {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
+                                        {hubStatus === 'ready' && "Acquisition successful. Your download has been initiated."}
+                                        {hubStatus === 'fallback' && "Fleet verification failed. Switch to manual acquisition below."}
                                     </p>
                                 </div>
 
-                                {/* Results Section */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className={cn(
-                                        "p-4 rounded-xl border transition-all duration-300",
-                                        hubResults.audio ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
-                                    )}>
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className={cn("p-2 rounded-lg", hubResults.audio ? "bg-[#1DB954]/20" : "bg-white/5")}>
-                                                <Music size={24} className={hubResults.audio ? "text-[#1DB954]" : "text-white/20"} />
-                                            </div>
-                                            <span className="text-xs font-medium">Audio M4A</span>
-                                            <button
-                                                onClick={() => {
-                                                    if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
-                                                    else if (hubStatus === 'tunneling') handleGhostProtocol('audio');
-                                                    else handleDownload('audio', true);
-                                                }}
-                                                className={cn(
-                                                    "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
-                                                    hubResults.audio
-                                                        ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                        : hubStatus === 'tunneling'
-                                                            ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
-                                                            : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
-                                                )}
-                                            >
-                                                {hubResults.audio ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
-                                            </button>
+                                {/* Universal Acquisition Button */}
+                                {hubStatus === 'tunneling' && (
+                                    <button
+                                        onClick={() => handleGhostProtocol('both')}
+                                        className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold uppercase tracking-wider transition-all duration-300 shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 group"
+                                    >
+                                        <div className="relative">
+                                            <Music size={18} className="group-hover:-translate-y-1 transition-transform" />
+                                            <Download size={10} className="absolute -bottom-1 -right-1" />
                                         </div>
-                                    </div>
-
-                                    <div className={cn(
-                                        "p-4 rounded-xl border transition-all duration-300",
-                                        hubResults.video ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
-                                    )}>
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className={cn("p-2 rounded-lg", hubResults.video ? "bg-[#1DB954]/20" : "bg-white/5")}>
-                                                <Video size={24} className={hubResults.video ? "text-[#1DB954]" : "text-white/20"} />
-                                            </div>
-                                            <span className="text-xs font-medium">Video MP4</span>
-                                            <button
-                                                onClick={() => {
-                                                    if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
-                                                    else if (hubStatus === 'tunneling') handleGhostProtocol('video');
-                                                    else handleDownload('video', true);
-                                                }}
-                                                className={cn(
-                                                    "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
-                                                    hubResults.video
-                                                        ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                        : hubStatus === 'tunneling'
-                                                            ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
-                                                            : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
-                                                )}
-                                            >
-                                                {hubResults.video ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
-                                            </button>
+                                        Download Both (Audio + Video)
+                                    </button>
+                                )}
+                                <div className={cn(
+                                    "p-4 rounded-xl border transition-all duration-300",
+                                    hubResults.audio ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
+                                )}>
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className={cn("p-2 rounded-lg", hubResults.audio ? "bg-[#1DB954]/20" : "bg-white/5")}>
+                                            <Music size={24} className={hubResults.audio ? "text-[#1DB954]" : "text-white/20"} />
                                         </div>
+                                        <span className="text-xs font-medium">Audio M4A</span>
+                                        <button
+                                            onClick={() => {
+                                                if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
+                                                else if (hubStatus === 'tunneling') handleGhostProtocol('audio');
+                                                else handleDownload('audio', true);
+                                            }}
+                                            className={cn(
+                                                "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
+                                                hubResults.audio
+                                                    ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
+                                                    : hubStatus === 'tunneling'
+                                                        ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
+                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
+                                            )}
+                                        >
+                                            {hubResults.audio ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
+                                        </button>
                                     </div>
                                 </div>
 
-                                {/* External Acquisition Button */}
-                                {hubStatus === 'fallback' && hubResults.fallbackUrl && (
-                                    <button
-                                        onClick={() => window.open(hubResults.fallbackUrl!, '_blank')}
-                                        className="w-full flex items-center justify-center gap-2 p-4 bg-amber-500 text-black rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition shadow-lg shadow-amber-500/20"
-                                    >
-                                        <ExternalLink size={18} />
-                                        Open Secure Acquisition Window
-                                    </button>
-                                )}
+                                <div className={cn(
+                                    "p-4 rounded-xl border transition-all duration-300",
+                                    hubResults.video ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
+                                )}>
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className={cn("p-2 rounded-lg", hubResults.video ? "bg-[#1DB954]/20" : "bg-white/5")}>
+                                            <Video size={24} className={hubResults.video ? "text-[#1DB954]" : "text-white/20"} />
+                                        </div>
+                                        <span className="text-xs font-medium">Video MP4</span>
+                                        <button
+                                            onClick={() => {
+                                                if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
+                                                else if (hubStatus === 'tunneling') handleGhostProtocol('video');
+                                                else handleDownload('video', true);
+                                            }}
+                                            className={cn(
+                                                "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
+                                                hubResults.video
+                                                    ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
+                                                    : hubStatus === 'tunneling'
+                                                        ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
+                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
+                                            )}
+                                        >
+                                            {hubResults.video ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
+
+                            {/* External Acquisition Button */}
+                            {hubStatus === 'fallback' && hubResults.fallbackUrl && (
+                                <button
+                                    onClick={() => window.open(hubResults.fallbackUrl!, '_blank')}
+                                    className="w-full flex items-center justify-center gap-2 p-4 bg-amber-500 text-black rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition shadow-lg shadow-amber-500/20"
+                                >
+                                    <ExternalLink size={18} />
+                                    Open Secure Acquisition Window
+                                </button>
+                            )}
                         </div>
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v24.0 Quasar-Shift
+                                Mellofy Ultra-Resilience Fleet v25.0 Super-Nova
                             </p>
                         </div>
                     </div>

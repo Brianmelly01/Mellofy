@@ -342,6 +342,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
         error: "Pulsar-Core Handshake failed. Initiating Zero-Signature Tunnel...",
         fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
-        ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`
+        ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`,
+        ghostProtocolEnabled: true
     });
 }
