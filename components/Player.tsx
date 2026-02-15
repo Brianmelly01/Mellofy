@@ -193,15 +193,15 @@ const Player = () => {
         }
     };
 
-    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both') => {
+    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both', skipProbe: boolean = false) => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
         setDownloadProgress(0);
 
         const bridgeFetch = async (t: 'audio' | 'video') => {
-            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true`;
+            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true${skipProbe ? '&skip_probe=true' : ''}`;
             const response = await fetch(pipeUrl);
-            if (!response.ok) throw new Error(`Super-Nova Bridge Failed for ${t}`);
+            if (!response.ok) throw new Error(`Omni-Tunnel Prime Failed for ${t}`);
 
             const contentLength = response.headers.get('content-length');
             const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -484,16 +484,16 @@ const Player = () => {
                                 </div>
 
                                 {/* Universal Acquisition Button */}
-                                {hubStatus === 'tunneling' && (
+                                {(hubStatus === 'tunneling' || hubStatus === 'fallback') && (
                                     <button
-                                        onClick={() => handleGhostProtocol('both')}
-                                        className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold uppercase tracking-wider transition-all duration-300 shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 group"
+                                        onClick={() => handleGhostProtocol('both', true)}
+                                        className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold uppercase tracking-wider transition-all duration-300 shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 group mb-4"
                                     >
                                         <div className="relative">
                                             <Music size={18} className="group-hover:-translate-y-1 transition-transform" />
                                             <Download size={10} className="absolute -bottom-1 -right-1" />
                                         </div>
-                                        Download Both (Audio + Video)
+                                        Tunnel Both (Audio + Video)
                                     </button>
                                 )}
                                 <div className={cn(
@@ -569,7 +569,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v25.0 Super-Nova
+                                Mellofy Ultra-Resilience Fleet v26.0 Omni-Tunnel Prime
                             </p>
                         </div>
                     </div>

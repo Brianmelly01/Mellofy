@@ -213,34 +213,39 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") || "both";
     const force = searchParams.get("force") === "true";
     const pipe = searchParams.get("pipe") === "true";
+    const skipProbe = searchParams.get("skip_probe") === "true";
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
-    // V23 PULSAR-CORE: Triple-Hop Proxy Relay & Zero-Signature Extraction
+    // V26 OMNI-TUNNEL PRIME: Forced Handshake & Zero-Signature Tunnel
     if (pipe) {
         try {
-            console.log(`Pulsar-Core Bridging: ${videoId} (${type})`);
+            console.log(`Pulsar-Core Bridging: ${videoId} (${type}) [SkipProbe: ${skipProbe}]`);
 
-            // Nebula Delegation (V22) + Pulsar Identity (V23)
-            const probeType = async (t: string) => {
-                let result;
-                const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-                const batchSize = 10;
-                for (let i = 0; i < 30; i += batchSize) {
-                    const batch = fullFleet.slice(i, i + batchSize);
-                    const results = await Promise.all(batch.map(instance =>
-                        instance.includes("cobalt") ? tryCobalt(instance, videoId, t, true) : tryInvidious(instance, videoId, t, true)
-                    ));
-                    result = results.find(r => r !== null);
-                    if (result) break;
-                }
-                return result;
-            };
+            let result;
 
-            let result = await probeType(type === "audio" ? "audio" : "video");
+            // If skipProbe is false, we try the fleet first (standard v23/v25 logic)
+            if (!skipProbe) {
+                const probeType = async (t: string) => {
+                    let r;
+                    const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
+                    const batchSize = 10;
+                    for (let i = 0; i < 30; i += batchSize) {
+                        const batch = fullFleet.slice(i, i + batchSize);
+                        const results = await Promise.all(batch.map(instance =>
+                            instance.includes("cobalt") ? tryCobalt(instance, videoId, t, true) : tryInvidious(instance, videoId, t, true)
+                        ));
+                        r = results.find(res => res !== null);
+                        if (r) break;
+                    }
+                    return r;
+                };
+                result = await probeType(type === "audio" ? "audio" : "video");
+            }
 
+            // Pulsar Level 3: Zero-Signature Extraction (InnerTube Human Simulation)
+            // Triggered if skipProbe=true OR if fleet probe failed
             if (!result?.url) {
-                // Pulsar Level 3: Zero-Signature Extraction (InnerTube Human Simulation)
                 const ytdl = require("@distube/ytdl-core");
                 const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
                     requestOptions: {
