@@ -427,11 +427,17 @@ const Player = () => {
                                 {/* Status Section */}
                                 <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                                     <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm text-white/60 font-medium">Status</span>
+                                        <span className="text-sm text-white/60 font-medium">Acquisition Status</span>
                                         {hubStatus === 'fallback' && (
-                                            <div className="flex items-center gap-2 text-amber-500">
-                                                <AlertTriangle size={16} />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Acquisition Restricted</span>
+                                            <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                                <AlertTriangle size={12} />
+                                                <span className="text-[10px] font-bold uppercase tracking-widest">Restricted</span>
+                                            </div>
+                                        )}
+                                        {hubStatus === 'tunneling' && (
+                                            <div className="flex items-center gap-2 text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                                                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />
+                                                <span className="text-[10px] font-bold uppercase tracking-widest">Quantum Bridge</span>
                                             </div>
                                         )}
                                     </div>
@@ -462,20 +468,28 @@ const Player = () => {
                                             </div>
                                         )}
                                         {hubStatus === 'tunneling' && (
-                                            <div className="w-full space-y-2">
-                                                <p className="flex items-center gap-2">
-                                                    <Loader2 size={14} className="animate-spin text-purple-500" />
-                                                    Super-Nova Bridge: Simulating Human Handshake & Authorized Session...
+                                            <div className="w-full space-y-3">
+                                                <p className="flex items-center gap-2 text-sm text-white/90 font-medium">
+                                                    <Loader2 size={16} className="animate-spin text-purple-500" />
+                                                    {downloadProgress === 0 && "Negotiating Quantum Handshake..."}
+                                                    {downloadProgress > 0 && downloadProgress < 30 && "Fragmenting Binary Stream..."}
+                                                    {downloadProgress >= 30 && downloadProgress < 60 && "Encrypted Tunnel Synchronized..."}
+                                                    {downloadProgress >= 60 && downloadProgress < 90 && "Streaming Media Fragments..."}
+                                                    {downloadProgress >= 90 && "Reassembling Media Blob..."}
                                                 </p>
-                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
                                                     <div
-                                                        className="h-full bg-purple-500 transition-all duration-300"
-                                                        style={{ width: `${downloadProgress || 25}%` }}
+                                                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-purple-600 transition-all duration-300 animate-gradient-x"
+                                                        style={{
+                                                            width: `${downloadProgress || 25}%`,
+                                                            backgroundSize: '200% 100%'
+                                                        }}
                                                     />
                                                 </div>
-                                                <p className="text-[10px] text-purple-400 animate-pulse">
-                                                    Streaming Fragmented Binary Data: {downloadProgress > 0 ? `${downloadProgress}%` : "Negotiating Relay..."}
-                                                </p>
+                                                <div className="flex justify-between items-center text-[10px] font-mono tracking-tighter uppercase">
+                                                    <span className="text-purple-400 animate-pulse">Bridge: Active</span>
+                                                    <span className="text-white/40">{downloadProgress > 0 ? `${downloadProgress}%` : "Establishing..."}</span>
+                                                </div>
                                             </div>
                                         )}
                                         {hubStatus === 'ready' && "Acquisition successful. Your download has been initiated."}
@@ -486,14 +500,20 @@ const Player = () => {
                                 {/* Universal Acquisition Button */}
                                 {(hubStatus === 'tunneling' || hubStatus === 'fallback') && (
                                     <button
+                                        disabled={hubStatus === 'tunneling'}
                                         onClick={() => handleGhostProtocol('both', true)}
-                                        className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold uppercase tracking-wider transition-all duration-300 shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 group mb-4"
+                                        className={cn(
+                                            "w-full py-4 rounded-xl font-bold uppercase tracking-widest transition-all duration-500 shadow-lg flex items-center justify-center gap-2 group mb-6 border-b-2",
+                                            hubStatus === 'tunneling'
+                                                ? "bg-purple-900/50 text-purple-300 border-purple-500/30 cursor-not-allowed opacity-80"
+                                                : "bg-[#1DB954] text-black border-[#1DB954]/50 hover:scale-[1.02] hover:bg-[#1ed760] active:scale-95 shadow-[#1DB954]/20"
+                                        )}
                                     >
                                         <div className="relative">
-                                            <Music size={18} className="group-hover:-translate-y-1 transition-transform" />
-                                            <Download size={10} className="absolute -bottom-1 -right-1" />
+                                            <Music size={18} className={cn(hubStatus === 'tunneling' && "animate-bounce")} />
+                                            {hubStatus === 'tunneling' && <div className="absolute inset-0 bg-purple-400/50 blur-lg animate-pulse rounded-full" />}
                                         </div>
-                                        Tunnel Both (Audio + Video)
+                                        {hubStatus === 'tunneling' ? "Tunneling Active..." : "Tunnel Both (Audio + Video)"}
                                     </button>
                                 )}
                                 <div className={cn(
@@ -569,7 +589,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v26.0 Omni-Tunnel Prime
+                                Mellofy Quantum-Shield Fleet v27.0 Quantum-Tunnel
                             </p>
                         </div>
                     </div>
