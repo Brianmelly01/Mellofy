@@ -164,11 +164,10 @@ const Player = () => {
         setHubStatus('tunneling');
         setDownloadProgress(0);
 
-        const bridgeFetch = async (t: 'audio' | 'video') => {
-            // Use robust tunneling (try fleet first, then ytdl)
-            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true`;
+        const bridgeFetch = async (t: 'audio' | 'video', skipProbe: boolean) => {
+            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true${skipProbe ? '&skip_probe=true' : ''}`;
             const response = await fetch(pipeUrl);
-            if (!response.ok) throw new Error(`Tunnel Failed for ${t}`);
+            if (!response.ok) throw new Error(`Tunnel Failed for ${t} (HTTP ${response.status})`);
 
             const contentLength = response.headers.get('content-length');
             const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -184,7 +183,7 @@ const Player = () => {
                 if (value) {
                     chunks.push(value);
                     loaded += value.length;
-                    if (total > 0 && (type !== 'both' || t === 'video')) { // Show video progress for 'both'
+                    if (total > 0 && (type !== 'both' || t === 'video')) {
                         setDownloadProgress(Math.floor((loaded / total) * 100));
                     }
                 }
@@ -194,31 +193,40 @@ const Player = () => {
             return URL.createObjectURL(blob);
         };
 
+        // Retry strategy: Try YTDL-direct first (fast), then Fleet (slower but different path)
+        const attemptDownload = async (t: 'audio' | 'video') => {
+            try {
+                // Attempt 1: Skip fleet, go straight to YTDL (fastest)
+                return await bridgeFetch(t, true);
+            } catch (e1) {
+                console.warn(`Attempt 1 (YTDL-direct) failed for ${t}:`, e1);
+                try {
+                    // Attempt 2: Try with Fleet probing (slower, different sources)
+                    return await bridgeFetch(t, false);
+                } catch (e2) {
+                    console.error(`Attempt 2 (Fleet) also failed for ${t}:`, e2);
+                    throw e2; // Both failed
+                }
+            }
+        };
+
         try {
             if (type === 'both') {
-                // Parallel download for speed
-                const [audioUrl, videoUrl] = await Promise.all([bridgeFetch('audio'), bridgeFetch('video')]);
-
+                const [audioUrl, videoUrl] = await Promise.all([attemptDownload('audio'), attemptDownload('video')]);
                 triggerLink(audioUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
                 setTimeout(() => triggerLink(videoUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`), 1000);
-
                 setHubStatus('ready');
-                // Cleanup
-                setTimeout(() => {
-                    URL.revokeObjectURL(audioUrl);
-                    URL.revokeObjectURL(videoUrl);
-                }, 60000); // Longer cleanup time
+                setTimeout(() => { URL.revokeObjectURL(audioUrl); URL.revokeObjectURL(videoUrl); }, 60000);
             } else {
-                const blobUrl = await bridgeFetch(type);
+                const blobUrl = await attemptDownload(type);
                 triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.${type === 'audio' ? 'm4a' : 'mp4'}`);
                 setHubStatus('ready');
-                setTimeout(() => {
-                    URL.revokeObjectURL(blobUrl);
-                }, 60000);
+                setTimeout(() => { URL.revokeObjectURL(blobUrl); }, 60000);
             }
         } catch (e) {
-            console.error("Tunnel Failure:", e);
+            console.error("All tunnel attempts failed:", e);
             setHubStatus('fallback');
+            setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
         }
     };
 
