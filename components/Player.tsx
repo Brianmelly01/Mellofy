@@ -150,11 +150,12 @@ const Player = () => {
             } else if (data.ghostProtocolEnabled) {
                 handleGhostProtocol(type);
             } else {
-                setHubStatus('fallback');
+                console.log("Status not ready, engaging Ghost Protocol...");
+                handleGhostProtocol(type);
             }
         } catch (err) {
-            setHubStatus('fallback');
-            setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
+            console.error("Download probe failed, engaging Ghost Protocol...", err);
+            handleGhostProtocol(type);
         }
     };
 
