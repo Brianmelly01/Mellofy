@@ -260,6 +260,61 @@ export async function GET(request: NextRequest) {
 
             if (!result?.url) throw new Error("Pulsar-Core: Handshake failed");
 
+            // If we found a result from the fleet, attempt to stream it.
+            // If the stream fails (403/404/Network), we nullify the result so `ytdl` takes over below.
+            if (result?.url) {
+                try {
+                    const streamResponse = await fetch(result.url, {
+                        headers: {
+                            ...GET_PULSAR_HEADERS(true),
+                            "Range": "bytes=0-",
+                            "Connection": "keep-alive"
+                        },
+                        signal: AbortSignal.timeout(10000) // 10s timeout for stream start
+                    });
+
+                    if (streamResponse.ok) {
+                        const headers = new Headers();
+                        const sourceContentType = streamResponse.headers.get("Content-Type");
+                        const sourceLength = streamResponse.headers.get("Content-Length");
+
+                        headers.set("Content-Type", sourceContentType || (type === "audio" ? "audio/mp4" : "video/mp4"));
+                        headers.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
+
+                        if (sourceLength) headers.set("Content-Length", sourceLength);
+                        headers.set("Accept-Ranges", "bytes");
+                        headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+                        headers.set("X-Pulsar-Core", "active");
+
+                        return new NextResponse(streamResponse.body, { headers });
+                    } else {
+                        console.warn("Pulsar: Fleet stream refused, switching to InnerTube...");
+                        result = null; // Trigger fallback
+                    }
+                } catch (streamErr) {
+                    console.warn("Pulsar: Fleet stream failed, switching to InnerTube...", streamErr);
+                    result = null; // Trigger fallback
+                }
+            }
+
+            // Pulsar Level 3: Zero-Signature Extraction (InnerTube Human Simulation)
+            // Triggered if skipProbe=true OR if fleet probe failed OR if fleet stream failed
+            if (!result?.url) {
+                const ytdl = require("@distube/ytdl-core");
+                const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
+                    requestOptions: {
+                        headers: GET_PULSAR_HEADERS(true)
+                    }
+                });
+                const format = type === "audio"
+                    ? ytdl.filterFormats(info.formats, "audioonly")[0]
+                    : ytdl.filterFormats(info.formats, "videoandaudio")[0];
+                if (format?.url) result = { url: format.url, title: info.videoDetails.title };
+            }
+
+            if (!result?.url) throw new Error("Pulsar-Core: Handshake failed");
+
+            // Stream from YTDL (InnerTube)
             const streamResponse = await fetch(result.url, {
                 headers: {
                     ...GET_PULSAR_HEADERS(true),
