@@ -214,13 +214,34 @@ export async function GET(request: NextRequest) {
     const force = searchParams.get("force") === "true";
     const pipe = searchParams.get("pipe") === "true";
     const skipProbe = searchParams.get("skip_probe") === "true";
+    const directUrl = searchParams.get("direct_url");
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
     // V26 OMNI-TUNNEL PRIME: Forced Handshake & Zero-Signature Tunnel
     if (pipe) {
         try {
-            console.log(`Pulsar-Core Bridging: ${videoId} (${type}) [SkipProbe: ${skipProbe}]`);
+            console.log(`Pulsar-Core Bridging: ${videoId} (${type}) [SkipProbe: ${skipProbe}, DirectURL: ${!!directUrl}]`);
+
+            // === PHASE 0: Direct URL Proxy (fastest - reuses already-discovered URL) ===
+            if (directUrl) {
+                console.log("Pulsar: Direct URL proxy mode");
+                const streamResponse = await fetch(directUrl, {
+                    headers: { ...GET_PULSAR_HEADERS(true), "Range": "bytes=0-", "Connection": "keep-alive" },
+                    signal: AbortSignal.timeout(15000)
+                });
+                if (streamResponse.ok) {
+                    const headers = new Headers();
+                    headers.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
+                    headers.set("Content-Disposition", `attachment; filename="download.${type === "audio" ? "m4a" : "mp4"}"`);
+                    if (streamResponse.headers.get("Content-Length")) headers.set("Content-Length", streamResponse.headers.get("Content-Length")!);
+                    headers.set("Accept-Ranges", "bytes");
+                    headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+                    headers.set("X-Pulsar-Core", "direct");
+                    return new NextResponse(streamResponse.body, { headers });
+                }
+                console.warn("Pulsar: Direct URL proxy failed, continuing with discovery...");
+            }
 
             let result: { url: string; title: string } | null = null;
 

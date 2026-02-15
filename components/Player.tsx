@@ -136,15 +136,19 @@ const Player = () => {
                 let videoOk = data.video ? await testUrlAccessibility(data.video.url) : true;
 
                 if (!audioOk || !videoOk) {
-                    console.log("Direct download failed. Falling back to tunnel.");
-                    handleGhostProtocol(type); // Auto-fallback
+                    console.log("Direct download failed. Falling back to tunnel with discovered URLs.");
+                    // Pass the discovered URLs to the tunnel for server-side proxying
+                    handleGhostProtocol(type, {
+                        audioUrl: data.audio?.url || null,
+                        videoUrl: data.video?.url || null
+                    });
                 } else {
                     setHubStatus('ready');
                     if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
                     if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
                     if (type === 'both') {
                         if (data.audio) triggerLink(data.audio.url, data.audio.filename);
-                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000); // Slight delay to ensure browser handles both
+                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
                     }
                 }
             } else if (data.ghostProtocolEnabled) {
@@ -159,13 +163,17 @@ const Player = () => {
         }
     };
 
-    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both') => {
+    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both', discoveredUrls?: { audioUrl: string | null, videoUrl: string | null }) => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
         setDownloadProgress(0);
 
-        const bridgeFetch = async (t: 'audio' | 'video', skipProbe: boolean) => {
-            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true${skipProbe ? '&skip_probe=true' : ''}`;
+        const bridgeFetch = async (t: 'audio' | 'video', directUrl?: string | null) => {
+            // Build the pipe URL - if we have a direct URL, pass it for server-side proxying
+            let pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true`;
+            if (directUrl) {
+                pipeUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
+            }
             const response = await fetch(pipeUrl);
             if (!response.ok) throw new Error(`Tunnel Failed for ${t} (HTTP ${response.status})`);
 
@@ -193,21 +201,32 @@ const Player = () => {
             return URL.createObjectURL(blob);
         };
 
-        // Retry strategy: Try YTDL-direct first (fast), then Fleet (slower but different path)
+        // Attempt strategy: 
+        // 1st: Use direct URL if available (server proxies the already-found URL)
+        // 2nd: Try YTDL-direct (skip_probe=true)
+        // 3rd: Try Fleet probing (skip_probe=false)
         const attemptDownload = async (t: 'audio' | 'video') => {
-            try {
-                // Attempt 1: Skip fleet, go straight to YTDL (fastest)
-                return await bridgeFetch(t, true);
-            } catch (e1) {
-                console.warn(`Attempt 1 (YTDL-direct) failed for ${t}:`, e1);
+            const directUrl = t === 'audio' ? discoveredUrls?.audioUrl : discoveredUrls?.videoUrl;
+
+            // Attempt 1: Direct URL proxy (fastest - reuses already-found URL)
+            if (directUrl) {
                 try {
-                    // Attempt 2: Try with Fleet probing (slower, different sources)
-                    return await bridgeFetch(t, false);
-                } catch (e2) {
-                    console.error(`Attempt 2 (Fleet) also failed for ${t}:`, e2);
-                    throw e2; // Both failed
+                    return await bridgeFetch(t, directUrl);
+                } catch (e) {
+                    console.warn(`Direct URL proxy failed for ${t}:`, e);
                 }
             }
+
+            // Attempt 2: YTDL-direct (skip fleet)
+            try {
+                return await bridgeFetch(t);
+            } catch (e) {
+                console.warn(`YTDL-direct failed for ${t}:`, e);
+            }
+
+            // Attempt 3: Fleet probing (last resort, but shouldn't reach here often)
+            // Not needed if direct URL was available - if it failed, fleet won't help
+            throw new Error(`All tunnel methods exhausted for ${t}`);
         };
 
         try {
