@@ -222,89 +222,52 @@ export async function GET(request: NextRequest) {
         try {
             console.log(`Pulsar-Core Bridging: ${videoId} (${type}) [SkipProbe: ${skipProbe}]`);
 
-            let result;
+            let result: { url: string; title: string } | null = null;
 
-            // If skipProbe is false, we try the fleet first (standard v23/v25 logic)
+            // === PHASE 1: Try Fleet (Cobalt/Invidious) ===
             if (!skipProbe) {
-                const probeType = async (t: string) => {
-                    let r;
-                    const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-                    const batchSize = 10;
-                    for (let i = 0; i < 30; i += batchSize) {
-                        const batch = fullFleet.slice(i, i + batchSize);
-                        const results = await Promise.all(batch.map(instance =>
-                            instance.includes("cobalt") ? tryCobalt(instance, videoId, t, true) : tryInvidious(instance, videoId, t, true)
-                        ));
-                        r = results.find(res => res !== null);
-                        if (r) break;
-                    }
-                    return r;
-                };
-                result = await probeType(type === "audio" ? "audio" : "video");
+                const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
+                const batchSize = 10;
+                for (let i = 0; i < 30; i += batchSize) {
+                    const batch = fullFleet.slice(i, i + batchSize);
+                    const results = await Promise.all(batch.map(instance =>
+                        instance.includes("cobalt") ? tryCobalt(instance, videoId, type === "audio" ? "audio" : "video", true) : tryInvidious(instance, videoId, type === "audio" ? "audio" : "video", true)
+                    ));
+                    const found = results.find(res => res !== null);
+                    if (found) { result = found; break; }
+                }
             }
 
-            // Pulsar Level 3: Zero-Signature Extraction (InnerTube Human Simulation)
-            // Triggered if skipProbe=true OR if fleet probe failed
-            if (!result?.url) {
-                const ytdl = require("@distube/ytdl-core");
-                const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                    requestOptions: {
-                        headers: GET_PULSAR_HEADERS(true)
-                    }
-                });
-                const format = type === "audio"
-                    ? ytdl.filterFormats(info.formats, "audioonly")[0]
-                    : ytdl.filterFormats(info.formats, "videoandaudio")[0];
-                if (format?.url) result = { url: format.url, title: info.videoDetails.title };
-            }
-
-            if (!result?.url) throw new Error("Pulsar-Core: Handshake failed");
-
-            // If we found a result from the fleet, attempt to stream it.
-            // If the stream fails (403/404/Network), we nullify the result so `ytdl` takes over below.
+            // === PHASE 2: Try streaming the Fleet result ===
             if (result?.url) {
                 try {
                     const streamResponse = await fetch(result.url, {
-                        headers: {
-                            ...GET_PULSAR_HEADERS(true),
-                            "Range": "bytes=0-",
-                            "Connection": "keep-alive"
-                        },
-                        signal: AbortSignal.timeout(10000) // 10s timeout for stream start
+                        headers: { ...GET_PULSAR_HEADERS(true), "Range": "bytes=0-", "Connection": "keep-alive" },
+                        signal: AbortSignal.timeout(10000)
                     });
-
                     if (streamResponse.ok) {
                         const headers = new Headers();
-                        const sourceContentType = streamResponse.headers.get("Content-Type");
-                        const sourceLength = streamResponse.headers.get("Content-Length");
-
-                        headers.set("Content-Type", sourceContentType || (type === "audio" ? "audio/mp4" : "video/mp4"));
+                        headers.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
                         headers.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
-
-                        if (sourceLength) headers.set("Content-Length", sourceLength);
+                        if (streamResponse.headers.get("Content-Length")) headers.set("Content-Length", streamResponse.headers.get("Content-Length")!);
                         headers.set("Accept-Ranges", "bytes");
                         headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-                        headers.set("X-Pulsar-Core", "active");
-
+                        headers.set("X-Pulsar-Core", "fleet");
                         return new NextResponse(streamResponse.body, { headers });
-                    } else {
-                        console.warn("Pulsar: Fleet stream refused, switching to InnerTube...");
-                        result = null; // Trigger fallback
                     }
+                    console.warn("Pulsar: Fleet stream HTTP error, falling back to YTDL...");
                 } catch (streamErr) {
-                    console.warn("Pulsar: Fleet stream failed, switching to InnerTube...", streamErr);
-                    result = null; // Trigger fallback
+                    console.warn("Pulsar: Fleet stream failed, falling back to YTDL...", streamErr);
                 }
+                result = null; // Clear so YTDL takes over
             }
 
-            // Pulsar Level 3: Zero-Signature Extraction (InnerTube Human Simulation)
-            // Triggered if skipProbe=true OR if fleet probe failed OR if fleet stream failed
+            // === PHASE 3: YTDL Fallback (InnerTube) ===
             if (!result?.url) {
+                console.log("Pulsar: Engaging YTDL InnerTube extraction...");
                 const ytdl = require("@distube/ytdl-core");
                 const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                    requestOptions: {
-                        headers: GET_PULSAR_HEADERS(true)
-                    }
+                    requestOptions: { headers: GET_PULSAR_HEADERS(true) }
                 });
                 const format = type === "audio"
                     ? ytdl.filterFormats(info.formats, "audioonly")[0]
@@ -312,31 +275,21 @@ export async function GET(request: NextRequest) {
                 if (format?.url) result = { url: format.url, title: info.videoDetails.title };
             }
 
-            if (!result?.url) throw new Error("Pulsar-Core: Handshake failed");
+            if (!result?.url) throw new Error("Pulsar-Core: All extraction methods failed");
 
-            // Stream from YTDL (InnerTube)
+            // === PHASE 4: Stream the YTDL result ===
             const streamResponse = await fetch(result.url, {
-                headers: {
-                    ...GET_PULSAR_HEADERS(true),
-                    "Range": "bytes=0-",
-                    "Connection": "keep-alive"
-                }
+                headers: { ...GET_PULSAR_HEADERS(true), "Range": "bytes=0-", "Connection": "keep-alive" }
             });
-
-            if (!streamResponse.ok) throw new Error("Pulsar binary tunnel failed");
+            if (!streamResponse.ok) throw new Error(`Pulsar: YTDL stream failed with ${streamResponse.status}`);
 
             const headers = new Headers();
-            const sourceContentType = streamResponse.headers.get("Content-Type");
-            const sourceLength = streamResponse.headers.get("Content-Length");
-
-            headers.set("Content-Type", sourceContentType || (type === "audio" ? "audio/mp4" : "video/mp4"));
+            headers.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
             headers.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
-
-            if (sourceLength) headers.set("Content-Length", sourceLength);
+            if (streamResponse.headers.get("Content-Length")) headers.set("Content-Length", streamResponse.headers.get("Content-Length")!);
             headers.set("Accept-Ranges", "bytes");
             headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-            headers.set("X-Pulsar-Core", "active");
-
+            headers.set("X-Pulsar-Core", "ytdl");
             return new NextResponse(streamResponse.body, { headers });
         } catch (e) {
             console.error("Pulsar-Core Interrupted:", e);
