@@ -427,7 +427,7 @@ const Player = () => {
                                 {(hubStatus === 'tunneling' || hubStatus === 'fallback') && (
                                     <button
                                         disabled={hubStatus === 'tunneling'}
-                                        onClick={() => handleGhostProtocol('both', true)}
+                                        onClick={() => handleGhostProtocol('both')}
                                         className={cn(
                                             "w-full py-4 rounded-xl font-bold uppercase tracking-widest transition-all duration-500 shadow-lg flex items-center justify-center gap-2 group mb-6 border-b-2",
                                             hubStatus === 'tunneling'
@@ -455,7 +455,7 @@ const Player = () => {
                                             onClick={() => {
                                                 if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
                                                 else if (hubStatus === 'tunneling') handleGhostProtocol('audio');
-                                                else handleDownload('audio', true);
+                                                else handleDownload('audio');
                                             }}
                                             className={cn(
                                                 "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
@@ -484,7 +484,7 @@ const Player = () => {
                                             onClick={() => {
                                                 if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
                                                 else if (hubStatus === 'tunneling') handleGhostProtocol('video');
-                                                else handleDownload('video', true);
+                                                else handleDownload('video');
                                             }}
                                             className={cn(
                                                 "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
