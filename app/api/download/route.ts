@@ -371,12 +371,24 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await probeType(type);
-    if (result) return NextResponse.json({ downloadUrl: result.url, filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}` });
+    if (result) {
+        const resultObj = { url: result.url, filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}` };
+        return NextResponse.json({
+            audio: type === "audio" ? resultObj : null,
+            video: type === "video" ? resultObj : null,
+            fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
+            status: "ready",
+            ghostProtocolEnabled: true
+        });
+    }
 
     return NextResponse.json({
+        audio: null,
+        video: null,
         error: "Pulsar-Core Handshake failed. Initiating Zero-Signature Tunnel...",
         fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
         ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`,
-        ghostProtocolEnabled: true
+        ghostProtocolEnabled: true,
+        status: "fallback_required"
     });
 }
