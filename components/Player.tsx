@@ -58,6 +58,7 @@ const Player = () => {
     const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating' | 'tunneling'>('probing');
     const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'verifying' | 'done'>('ytdl');
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
+    const [handshakeProgress, setHandshakeProgress] = useState<number>(0);
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -151,12 +152,24 @@ const Player = () => {
                 let videoOk = data.video ? await testUrlAccessibility(data.video.url) : true;
 
                 if (!audioOk || !videoOk) {
-                    console.log("Hyper-Tunnel: Critical IP-Lock detected. Initiating Piping protocol.");
-                    // V23: Pulsar-Core Auto-Escalation
-                    // If a signature block is detected, automatically escalate to Zero-Signature Tunnel
-                    setExtractionLayer('mobile_elite');
+                    console.log("Hyper-Tunnel: Critical IP-Lock detected. Initiating Pulsar-Core escalation.");
                     setHubStatus('obliterating');
+                    setExtractionLayer('mobile_elite');
+                    setHandshakeProgress(0);
+
+                    // Quasar-Shift: Simulated handshake progress for 1.5s delay
+                    const interval = setInterval(() => {
+                        setHandshakeProgress(prev => {
+                            if (prev >= 95) {
+                                clearInterval(interval);
+                                return 100;
+                            }
+                            return prev + 5;
+                        });
+                    }, 75);
+
                     setTimeout(() => {
+                        clearInterval(interval);
                         handleGhostProtocol(type === 'both' ? 'audio' : type);
                     }, 1500);
                 } else {
@@ -446,11 +459,18 @@ const Player = () => {
                                             </>
                                         )}
                                         {hubStatus === 'obliterating' && (
-                                            <>
-                                                {extractionLayer === 'mobile_elite' && "Switching to Android Music Mobile authorized bridge..."}
-                                                {extractionLayer === 'shotgun' && "Saturating signature decryptors via expanded shotgun batch..."}
-                                                {extractionLayer === 'cobalt' && "Finalizing high-resilience stream reconstruction..."}
-                                            </>
+                                            <div className="w-full space-y-2">
+                                                <p className="text-[#1DB954] font-medium">Bypassing Signature Block: Establishing Pulsar Handshake...</p>
+                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-[#1DB954] transition-all duration-300"
+                                                        style={{ width: `${handshakeProgress}%` }}
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-white/40">
+                                                    Simulating active human playback session: {handshakeProgress}%
+                                                </p>
+                                            </div>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-2">
@@ -468,7 +488,7 @@ const Player = () => {
                                                 </p>
                                             </div>
                                         )}
-                                        {extractionLayer === 'verifying' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
+                                        {extractionLayer === 'verifying' && hubStatus === 'probing' && "Performing Fleet Security Verification (Ghost-Node Check)..."}
                                         {hubStatus === 'ready' && "Direct extraction successful. Your download has been initiated."}
                                         {hubStatus === 'fallback' && "Fleet verification failed. Switching to Secure Acquisition..."}
                                     </p>
@@ -550,7 +570,7 @@ const Player = () => {
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
                             <p className="text-[10px] text-white/20 text-center uppercase tracking-[0.2em]">
-                                Mellofy Ultra-Resilience Fleet v23.0 Pulsar-Core
+                                Mellofy Ultra-Resilience Fleet v24.0 Quasar-Shift
                             </p>
                         </div>
                     </div>
