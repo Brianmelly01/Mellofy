@@ -55,10 +55,9 @@ const Player = () => {
 
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
-    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating' | 'tunneling'>('probing');
-    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'verifying' | 'done'>('ytdl');
+    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'tunneling'>('probing');
+    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'verifying'>('ytdl');
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
-    const [handshakeProgress, setHandshakeProgress] = useState<number>(0);
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -111,35 +110,20 @@ const Player = () => {
         }
     };
 
-    const handleDownload = async (type: 'audio' | 'video' | 'both', isForce: boolean = false) => {
+    const handleDownload = async (type: 'audio' | 'video' | 'both') => {
         if (!currentTrack) return;
 
         setIsHubOpen(true);
-        setHubStatus(isForce ? 'obliterating' : 'probing');
-        setExtractionLayer(isForce ? 'mobile_elite' : 'ytdl');
+        setHubStatus('probing');
+        setExtractionLayer('ytdl');
         setHubResults({ audio: null, video: null, fallbackUrl: null });
         setShowDownloadMenu(false);
 
-        // Simulation cycle for granular UX progress
-        const layers: ('ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite')[] = isForce
-            ? ['mobile_elite', 'shotgun', 'cobalt']
-            : ['ytdl', 'cobalt', 'shotgun'];
-
-        let currentLayerIndex = 0;
-        const layerInterval = setInterval(() => {
-            if (currentLayerIndex < layers.length - 1) {
-                currentLayerIndex++;
-                setExtractionLayer(layers[currentLayerIndex]);
-            }
-        }, isForce ? 1000 : 1500);
-
         try {
-            const response = await fetch(`/api/download?id=${currentTrack.id}&type=both${isForce ? '&force=true' : ''}`);
+            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
             const data = await response.json();
 
-            clearInterval(layerInterval);
             setExtractionLayer('verifying');
-
             setHubResults({
                 audio: data.audio,
                 video: data.video,
@@ -147,61 +131,43 @@ const Player = () => {
             });
 
             if (data.status === 'ready') {
-                // V19 Failure-Reflex: Test accessibility before initiating
+                // Test accessibility
                 let audioOk = data.audio ? await testUrlAccessibility(data.audio.url) : true;
                 let videoOk = data.video ? await testUrlAccessibility(data.video.url) : true;
 
                 if (!audioOk || !videoOk) {
-                    console.log("Hyper-Tunnel: Critical IP-Lock detected. Initiating Pulsar-Core escalation.");
-                    setHubStatus('obliterating');
-                    setExtractionLayer('mobile_elite');
-                    setHandshakeProgress(0);
-
-                    // Quasar-Shift: Simulated handshake progress for 1.5s delay
-                    const interval = setInterval(() => {
-                        setHandshakeProgress(prev => {
-                            if (prev >= 95) {
-                                clearInterval(interval);
-                                return 100;
-                            }
-                            return prev + 5;
-                        });
-                    }, 75);
-
-                    setTimeout(() => {
-                        clearInterval(interval);
-                        handleGhostProtocol(type === 'both' ? 'audio' : type);
-                    }, 1500);
+                    console.log("Direct download failed. Falling back to tunnel.");
+                    handleGhostProtocol(type); // Auto-fallback
                 } else {
                     setHubStatus('ready');
                     if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
                     if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
                     if (type === 'both') {
                         if (data.audio) triggerLink(data.audio.url, data.audio.filename);
-                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
+                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000); // Slight delay to ensure browser handles both
                     }
                 }
             } else if (data.ghostProtocolEnabled) {
-                setHubStatus('tunneling');
+                handleGhostProtocol(type);
             } else {
                 setHubStatus('fallback');
             }
         } catch (err) {
-            clearInterval(layerInterval);
             setHubStatus('fallback');
             setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
         }
     };
 
-    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both', skipProbe: boolean = false) => {
+    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both') => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
         setDownloadProgress(0);
 
         const bridgeFetch = async (t: 'audio' | 'video') => {
-            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true${skipProbe ? '&skip_probe=true' : ''}`;
+            // Use robust tunneling (try fleet first, then ytdl)
+            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true`;
             const response = await fetch(pipeUrl);
-            if (!response.ok) throw new Error(`Omni-Tunnel Prime Failed for ${t}`);
+            if (!response.ok) throw new Error(`Tunnel Failed for ${t}`);
 
             const contentLength = response.headers.get('content-length');
             const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -217,7 +183,7 @@ const Player = () => {
                 if (value) {
                     chunks.push(value);
                     loaded += value.length;
-                    if (total > 0 && type !== 'both') {
+                    if (total > 0 && (type !== 'both' || t === 'video')) { // Show video progress for 'both'
                         setDownloadProgress(Math.floor((loaded / total) * 100));
                     }
                 }
@@ -229,38 +195,28 @@ const Player = () => {
 
         try {
             if (type === 'both') {
-                setDownloadProgress(25); // Initial sync
+                // Parallel download for speed
                 const [audioUrl, videoUrl] = await Promise.all([bridgeFetch('audio'), bridgeFetch('video')]);
-                setDownloadProgress(100);
+
                 triggerLink(audioUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
                 setTimeout(() => triggerLink(videoUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`), 1000);
 
+                setHubStatus('ready');
+                // Cleanup
                 setTimeout(() => {
                     URL.revokeObjectURL(audioUrl);
                     URL.revokeObjectURL(videoUrl);
-                    setHubStatus('ready');
-                    setDownloadProgress(0);
-                }, 5000);
-            } else if (type === 'audio') {
-                const blobUrl = await bridgeFetch('audio');
-                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
-                setTimeout(() => {
-                    URL.revokeObjectURL(blobUrl);
-                    setHubStatus('ready');
-                    setDownloadProgress(0);
-                }, 3000);
+                }, 60000); // Longer cleanup time
             } else {
-                // Video single fetch
-                const blobUrl = await bridgeFetch('video');
-                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`);
+                const blobUrl = await bridgeFetch(type);
+                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.${type === 'audio' ? 'm4a' : 'mp4'}`);
+                setHubStatus('ready');
                 setTimeout(() => {
                     URL.revokeObjectURL(blobUrl);
-                    setHubStatus('ready');
-                    setDownloadProgress(0);
-                }, 3000);
+                }, 60000);
             }
         } catch (e) {
-            console.error("Super-Nova Failure:", e);
+            console.error("Tunnel Failure:", e);
             setHubStatus('fallback');
         }
     };
@@ -427,74 +383,44 @@ const Player = () => {
                                 {/* Status Section */}
                                 <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                                     <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm text-white/60 font-medium">Acquisition Status</span>
+                                        <span className="text-sm text-white/60 font-medium">Status</span>
                                         {hubStatus === 'fallback' && (
                                             <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
                                                 <AlertTriangle size={12} />
-                                                <span className="text-[10px] font-bold uppercase tracking-widest">Restricted</span>
+                                                <span className="text-[10px] font-bold uppercase tracking-widest">Manual Required</span>
                                             </div>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="flex items-center gap-2 text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                                                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />
-                                                <span className="text-[10px] font-bold uppercase tracking-widest">Quantum Bridge</span>
+                                                <Loader2 size={12} className="animate-spin" />
+                                                <span className="text-[10px] font-bold uppercase tracking-widest">Tunneling</span>
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-white/40 leading-relaxed italic">
+                                    <div className="text-xs text-white/40 leading-relaxed">
                                         {hubStatus === 'probing' && (
                                             <span className="flex items-center gap-2">
                                                 <Loader2 size={14} className="animate-spin text-[#1DB954]" />
-                                                {extractionLayer === 'ytdl' && "Deciphering YouTube Signature logic (InnerTube Layer)..."}
-                                                {extractionLayer === 'cobalt' && "Injecting stream into Global Cobalt Network..."}
-                                                {extractionLayer === 'shotgun' && "Probing verified worldwide proxy nodes..."}
+                                                Searching for best quality stream...
                                             </span>
-                                        )}
-                                        {hubStatus === 'obliterating' && (
-                                            <div className="w-full space-y-2">
-                                                <p className="text-[#1DB954] font-medium flex items-center gap-2">
-                                                    <AlertTriangle size={14} className="animate-pulse" />
-                                                    Signature Detected: Establishing Pulsar Handshake...
-                                                </p>
-                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-[#1DB954] transition-all duration-300"
-                                                        style={{ width: `${handshakeProgress}%` }}
-                                                    />
-                                                </div>
-                                                <p className="text-[10px] text-white/40">
-                                                    Simulating active human playback session: {handshakeProgress}%
-                                                </p>
-                                            </div>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-3">
                                                 <p className="flex items-center gap-2 text-sm text-white/90 font-medium">
                                                     <Loader2 size={16} className="animate-spin text-purple-500" />
-                                                    {downloadProgress === 0 && "Negotiating Quantum Handshake..."}
-                                                    {downloadProgress > 0 && downloadProgress < 30 && "Fragmenting Binary Stream..."}
-                                                    {downloadProgress >= 30 && downloadProgress < 60 && "Encrypted Tunnel Synchronized..."}
-                                                    {downloadProgress >= 60 && downloadProgress < 90 && "Streaming Media Fragments..."}
-                                                    {downloadProgress >= 90 && "Reassembling Media Blob..."}
+                                                    {downloadProgress > 0 ? `Downloading... ${downloadProgress}%` : "Establishing secure tunnel..."}
                                                 </p>
                                                 <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
                                                     <div
-                                                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-purple-600 transition-all duration-300 animate-gradient-x"
-                                                        style={{
-                                                            width: `${downloadProgress || 25}%`,
-                                                            backgroundSize: '200% 100%'
-                                                        }}
+                                                        className="absolute inset-y-0 left-0 bg-purple-600 transition-all duration-300"
+                                                        style={{ width: `${downloadProgress}%` }}
                                                     />
-                                                </div>
-                                                <div className="flex justify-between items-center text-[10px] font-mono tracking-tighter uppercase">
-                                                    <span className="text-purple-400 animate-pulse">Bridge: Active</span>
-                                                    <span className="text-white/40">{downloadProgress > 0 ? `${downloadProgress}%` : "Establishing..."}</span>
                                                 </div>
                                             </div>
                                         )}
-                                        {hubStatus === 'ready' && "Acquisition successful. Your download has been initiated."}
-                                        {hubStatus === 'fallback' && "Fleet verification failed. Switch to manual acquisition below."}
-                                    </p>
+                                        {hubStatus === 'ready' && "Download initiated check your downloads folder."}
+                                        {hubStatus === 'fallback' && "Automatic download failed. Use the external link below."}
+                                    </div>
                                 </div>
 
                                 {/* Universal Acquisition Button */}
@@ -582,7 +508,7 @@ const Player = () => {
                                     className="w-full flex items-center justify-center gap-2 p-4 bg-amber-500 text-black rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition shadow-lg shadow-amber-500/20"
                                 >
                                     <ExternalLink size={18} />
-                                    Open Secure Acquisition Window
+                                    Open External Downloader
                                 </button>
                             )}
                         </div>
