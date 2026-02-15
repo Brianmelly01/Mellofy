@@ -163,6 +163,46 @@ const Player = () => {
         }
     };
 
+    // Reliable public instances that support CORS
+    const COBALT_PUBLIC_INSTANCES = [
+        "https://cobalt.canine.tools",
+        "https://lc.vern.cc",
+        "https://cobalt.tools"
+    ];
+
+    const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
+        for (const instance of COBALT_PUBLIC_INSTANCES) {
+            try {
+                const response = await fetch(`${instance}/api/json`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        url: `https://www.youtube.com/watch?v=${videoId}`,
+                        videoQuality: "720",
+                        downloadMode: type === "audio" ? "audio" : "auto",
+                        youtubeVideoCodec: "h264",
+                        audioFormat: "best",
+                        filenamePattern: "basic"
+                    })
+                });
+
+                if (!response.ok) continue;
+                const data = await response.json();
+
+                if (data.status === "error") continue;
+                if (data.url) return data.url;
+                if (data.picker && data.picker.length > 0) return data.picker[0].url;
+
+            } catch (e) {
+                console.warn(`Client-side probe failed for ${instance}:`, e);
+            }
+        }
+        return null;
+    };
+
     const handleGhostProtocol = async (type: 'audio' | 'video' | 'both', discoveredUrls?: { audioUrl: string | null, videoUrl: string | null }) => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
@@ -202,30 +242,46 @@ const Player = () => {
         };
 
         // Attempt strategy: 
-        // 1st: Use direct URL if available (server proxies the already-found URL)
-        // 2nd: Try YTDL-direct (skip_probe=true)
-        // 3rd: Try Fleet probing (skip_probe=false)
+        // 1st: Use server tunnel with direct URL (if available)
+        // 2nd: Use server tunnel with YTDL/Fleet (server-side)
+        // 3rd: Client-side probe (bypass Vercel)
         const attemptDownload = async (t: 'audio' | 'video') => {
             const directUrl = t === 'audio' ? discoveredUrls?.audioUrl : discoveredUrls?.videoUrl;
 
-            // Attempt 1: Direct URL proxy (fastest - reuses already-found URL)
-            if (directUrl) {
-                try {
-                    return await bridgeFetch(t, directUrl);
-                } catch (e) {
-                    console.warn(`Direct URL proxy failed for ${t}:`, e);
-                }
-            }
-
-            // Attempt 2: YTDL-direct (skip fleet)
+            // Attempt 1 & 2: Server Tunnel (proxies the download)
             try {
-                return await bridgeFetch(t);
+                return await bridgeFetch(t, directUrl);
             } catch (e) {
-                console.warn(`YTDL-direct failed for ${t}:`, e);
+                console.warn(`Server tunnel failed for ${t}, switching to Client-Side Fallback...`, e);
             }
 
-            // Attempt 3: Fleet probing (last resort, but shouldn't reach here often)
-            // Not needed if direct URL was available - if it failed, fleet won't help
+            // Attempt 3: Client-Side Fallback (Directly query Cobalt from browser)
+            try {
+                console.log(`Engaging Client-Side Fallback for ${t}...`);
+                const clientUrl = await clientSideProbe(currentTrack.id, t);
+                if (clientUrl) {
+                    console.log(`Client-Side success! URL: ${clientUrl}`);
+                    // Simply return the direct URL? No, we need a Blob URL for consistency if possible, 
+                    // BUT triggerLink handles direct URLs too. 
+                    // If we return a direct URL here, `triggerLink` will use `download` attr, which might be ignored if cross-origin.
+                    // But usually Cobalt URLs are downloadable.
+                    // To be safe, we can try to fetch it as blob IF CORS allows.
+                    try {
+                        const res = await fetch(clientUrl);
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            return URL.createObjectURL(blob);
+                        }
+                    } catch (corsErr) {
+                        // If fetch fails (CORS), just return the raw URL and let browser handle it
+                        console.log("Client-side fetch blocked by CORS, returning raw URL");
+                        return clientUrl;
+                    }
+                }
+            } catch (e) {
+                console.warn(`Client-side probe failed for ${t}:`, e);
+            }
+
             throw new Error(`All tunnel methods exhausted for ${t}`);
         };
 
@@ -235,12 +291,16 @@ const Player = () => {
                 triggerLink(audioUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
                 setTimeout(() => triggerLink(videoUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`), 1000);
                 setHubStatus('ready');
-                setTimeout(() => { URL.revokeObjectURL(audioUrl); URL.revokeObjectURL(videoUrl); }, 60000);
+                // Only revoke if it looks like a blob url
+                setTimeout(() => {
+                    if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
+                    if (videoUrl.startsWith('blob:')) URL.revokeObjectURL(videoUrl);
+                }, 60000);
             } else {
                 const blobUrl = await attemptDownload(type);
                 triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.${type === 'audio' ? 'm4a' : 'mp4'}`);
                 setHubStatus('ready');
-                setTimeout(() => { URL.revokeObjectURL(blobUrl); }, 60000);
+                setTimeout(() => { if (blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl); }, 60000);
             }
         } catch (e) {
             console.error("All tunnel attempts failed:", e);
