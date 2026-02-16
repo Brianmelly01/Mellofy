@@ -163,44 +163,28 @@ const Player = () => {
         }
     };
 
-    // Reliable public instances that support CORS
-    const COBALT_PUBLIC_INSTANCES = [
-        "https://cobalt.canine.tools",
-        "https://lc.vern.cc",
-        "https://cobalt.tools",
-        "https://api.cobalt.tools",
-        "https://cobalt.mayo.sh",
-        "https://cobalt.meowing.de",
-        "https://cobalt.razor.sh",
-        "https://cobalt.synack.me",
-        "https://cobalt.154.53.56.155.nip.io",
-        "https://cobalt.timelessances.com",
-        "https://co.wuk.sh",
-        "https://cobalt.03c8.net"
+    // V4 ULTIMATE PROBE CONSTANTS
+    const PIPED_NODES = [
+        "https://pipedapi.kavin.rocks",
+        "https://api.piped.privacydev.net",
+        "https://pipedapi.adminforge.de",
+        "https://pipedapi.leptons.xyz",
+        "https://pipedapi.recloud.me",
+        "https://piped-api.lunar.icu",
+        "https://api.piped.victr.me",
+        "https://pipedapi.tokyo.kappa.host"
     ];
 
-    const INVIDIOUS_INSTANCES = [
+    const INVIDIOUS_NODES = [
         "https://vid.puffyan.us",
         "https://invidious.flokinet.to",
         "https://inv.vern.cc",
-        "https://invidious.drgns.space",
         "https://iv.ggtyler.dev",
-        "https://invidious.projectsegfau.lt",
-        "https://iv.n0p.me",
-        "https://invidious.namazso.eu"
-    ];
-
-    const PIPED_INSTANCES = [
-        "https://pipedapi.kavin.rocks",
-        "https://pipedapi.tokyo.kappa.host",
-        "https://api.piped.victr.me",
-        "https://pipedapi.recloud.me",
-        "https://pipedapi.leptons.xyz",
-        "https://api.piped.privacydev.net"
+        "https://invidious.projectsegfau.lt"
     ];
 
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
-        const fetchWithTimeout = async (url: string, options: any, timeout = 7000) => {
+        const fetchWithTimeout = async (url: string, options: any, timeout = 6000) => {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeout);
             try {
@@ -216,19 +200,15 @@ const Player = () => {
         const tryAllOrigins = async (url: string) => {
             try {
                 const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                const res = await fetchWithTimeout(proxyUrl, {});
+                const res = await fetchWithTimeout(proxyUrl, {}, 8000);
                 if (!res.ok) return null;
                 const data = await res.json();
                 return JSON.parse(data.contents);
-            } catch (e) {
-                return null;
-            }
+            } catch (e) { return null; }
         };
 
-        // 1. Try Piped API (Most reliable as it proxies streams)
-        for (const instance of PIPED_INSTANCES) {
+        const probePiped = async (instance: string): Promise<string | null> => {
             try {
-                // Try direct first, then proxy
                 let data = null;
                 try {
                     const res = await fetchWithTimeout(`${instance}/streams/${videoId}`, { headers: { "Accept": "application/json" } });
@@ -240,42 +220,14 @@ const Player = () => {
                 if (data && data.audioStreams && data.audioStreams.length > 0) {
                     if (type === 'audio') return data.audioStreams[0].url;
                     if (type === 'video' && data.videoStreams && data.videoStreams.length > 0) {
-                        const vd = data.videoStreams.find((s: any) => !s.videoOnly) || data.videoStreams[0];
-                        return vd.url;
+                        return (data.videoStreams.find((s: any) => !s.videoOnly) || data.videoStreams[0]).url;
                     }
                 }
             } catch (e) { }
-        }
+            return null;
+        };
 
-        // 2. Try Cobalt Instances
-        for (const instance of COBALT_PUBLIC_INSTANCES) {
-            try {
-                const response = await fetchWithTimeout(`${instance}/api/json`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Accept": "application/json"
-                    },
-                    body: JSON.stringify({
-                        url: `https://www.youtube.com/watch?v=${videoId}`,
-                        videoQuality: "720",
-                        downloadMode: type === "audio" ? "audio" : "auto",
-                        youtubeVideoCodec: "h264",
-                        audioFormat: "best",
-                        filenamePattern: "basic"
-                    })
-                });
-
-                if (!response.ok) continue;
-                const data = await response.json();
-                if (data.status === "error") continue;
-                if (data.url) return data.url;
-                if (data.picker && data.picker.length > 0) return data.picker[0].url;
-            } catch (e) { }
-        }
-
-        // 3. Try Invidious API
-        for (const instance of INVIDIOUS_INSTANCES) {
+        const probeInvidious = async (instance: string): Promise<string | null> => {
             try {
                 let data = null;
                 try {
@@ -292,6 +244,45 @@ const Player = () => {
                     if (stream) return stream.url;
                 }
             } catch (e) { }
+            return null;
+        };
+
+        // V4 Strategy: Concurrent Polling in Parallel
+        try {
+            console.log(`V4 Pulsar: Launching concurrent search for ${videoId}...`);
+
+            // 1. Concurrent Piped Probing (The main hope)
+            const pipedResults = await Promise.all(PIPED_NODES.slice(0, 6).map(node => probePiped(node)));
+            const workingPiped = pipedResults.find(r => r !== null);
+            if (workingPiped) return workingPiped;
+
+            // 2. Concurrent Invidious Probing (Backup)
+            const invResults = await Promise.all(INVIDIOUS_NODES.slice(0, 4).map(node => probeInvidious(node)));
+            const workingInv = invResults.find(r => r !== null);
+            if (workingInv) return workingInv;
+
+            // 3. Cobalt (Last resort automated)
+            // Restore COBALT_PUBLIC_INSTANCES locally for this block
+            const COBALT_INSTS = [
+                "https://cobalt.canine.tools",
+                "https://lc.vern.cc",
+                "https://cobalt.tools"
+            ];
+            for (const instance of COBALT_INSTS) {
+                try {
+                    const res = await fetchWithTimeout(`${instance}/api/json`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ url: `https://youtube.com/watch?v=${videoId}`, downloadMode: type === 'audio' ? 'audio' : 'auto' })
+                    });
+                    if (res.ok) {
+                        const d = await res.json();
+                        if (d.url) return d.url;
+                    }
+                } catch (e) { }
+            }
+        } catch (globalErr) {
+            console.error("V4 Engine failure:", globalErr);
         }
 
         return null;
