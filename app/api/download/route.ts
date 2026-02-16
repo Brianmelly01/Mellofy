@@ -81,10 +81,15 @@ const HUMAN_POTOKENS = [
 
 // V23 Pulsar-Core Headers (Active Playback Simulation)
 const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
-    const isMobile = force;
-    let userAgent = incomingUA || (isMobile
-        ? "com.google.android.youtube/19.12.35 (Linux; U; Android 14; en_US; Pixel 9; build/AP1A.240505.004)"
-        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+    // Mode 17: TV-Client Spear (High-Trust, Low-Signature)
+    const isTV = force && Math.random() > 0.5;
+    const isMobile = force && !isTV;
+
+    let userAgent = incomingUA || (isTV
+        ? "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.2 Chrome/131.0.0.0 TV Safari/537.36"
+        : isMobile
+            ? "com.google.android.youtube/19.12.35 (Linux; U; Android 14; en_US; Pixel 9; build/AP1A.240505.004)"
+            : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
     // Rotate tokens from the verified human signal list
     const token = force ? HUMAN_POTOKENS[Math.floor(Math.random() * HUMAN_POTOKENS.length)] : "M" + Math.random().toString(36).substring(2, 40);
@@ -93,8 +98,8 @@ const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
         "Content-Type": "application/json",
         "Accept": "*/*",
         "User-Agent": userAgent,
-        "X-YouTube-Client-Name": isMobile ? "21" : "1",
-        "X-YouTube-Client-Version": isMobile ? "19.12.35" : "2.20250224.01.00",
+        "X-YouTube-Client-Name": isTV ? "62" : (isMobile ? "21" : "1"),
+        "X-YouTube-Client-Version": isTV ? "1.20250224.01.00" : (isMobile ? "19.12.35" : "2.20250224.01.00"),
         "X-Goog-Visitor-Id": Math.random().toString(36).substring(2, 12),
         "X-YouTube-Po-Token": token,
         "Origin": "https://www.youtube.com",

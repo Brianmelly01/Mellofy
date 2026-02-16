@@ -203,9 +203,9 @@ const Player = () => {
 
         const probePiped = async (instance: string): Promise<string | null> => {
             try {
-                // Phase 16: Relayed Discovery (CORS-Proof)
-                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/streams/${videoId}`)}`;
-                const res = await fetchWithTimeout(bridgeUrl, { headers: { "Accept": "application/json" } }, 10000).catch(() => null);
+                // Phase 17: Relay Shotgun (Ultra-Robust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/streams/${videoId}`)}&force=true`;
+                const res = await fetchWithTimeout(bridgeUrl, { headers: { "Accept": "application/json" } }, 12000).catch(() => null);
                 if (res && res.ok) {
                     const data = await res.json();
                     const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
@@ -219,9 +219,9 @@ const Player = () => {
 
         const probeInvidious = async (instance: string): Promise<string | null> => {
             try {
-                // Phase 16: Relayed Discovery (CORS-Proof)
-                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/v1/videos/${videoId}?local=true`)}`;
-                const res = await fetchWithTimeout(bridgeUrl, {}, 10000).catch(() => null);
+                // Phase 17: Relay Shotgun (Ultra-Robust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/v1/videos/${videoId}?local=true`)}&force=true`;
+                const res = await fetchWithTimeout(bridgeUrl, {}, 12000).catch(() => null);
                 if (res && res.ok) {
                     const data = await res.json();
                     const formats = data.adaptiveFormats || data.formatStreams || [];
@@ -236,8 +236,8 @@ const Player = () => {
 
         const probeCobalt = async (instance: string): Promise<string | null> => {
             try {
-                // Phase 16: Relayed Discovery (CORS-Proof)
-                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/json`)}`;
+                // Phase 17: Relay Shotgun (Ultra-Robust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/json`)}&force=true`;
                 const payload = {
                     url: `https://youtube.com/watch?v=${videoId}`,
                     downloadMode: type === 'audio' ? 'audio' : 'auto',
@@ -247,7 +247,7 @@ const Player = () => {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
-                }, 10000).catch(() => null);
+                }, 12000).catch(() => null);
 
                 if (res && res.ok) {
                     const d = await res.json();
@@ -257,16 +257,16 @@ const Player = () => {
             return null;
         };
 
-        const probeInnerTube = async (): Promise<string | null> => {
+        const probeTV = async (): Promise<string | null> => {
             try {
-                // Phase 16: Relayed Source Spear (CORS+IP Proof)
-                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`https://www.youtube.com/youtubei/v1/player`)}`;
+                // Phase 17: TV-Client Spear (Relayed, Ultra-Trust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`https://www.youtube.com/youtubei/v1/player`)}&force=true`;
                 const payload = {
                     videoId,
                     context: {
                         client: {
-                            clientName: 'ANDROID',
-                            clientVersion: '19.12.35'
+                            clientName: 'TVHTML5',
+                            clientVersion: '7.20250224.01.00'
                         }
                     }
                 };
@@ -288,23 +288,23 @@ const Player = () => {
             return null;
         };
 
-        // V4 Strategy: Unified High-Intensity Concurrent Shotgun (Singularity V11)
+        // V4 Strategy: Unified Ultra-Intensity Relayed Shotgun (Singularity V17)
         try {
             console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
             setStatusMessage("Engaging Emergency Mirror Fleet...");
 
             const allNodes = [
-                { type: 'innertube' as const, url: 'direct' },
+                { type: 'tv' as const, url: 'direct' },
                 ...PIPED_NODES.map(n => ({ type: 'piped' as const, url: n })),
                 ...INVIDIOUS_NODES.map(n => ({ type: 'invidious' as const, url: n })),
                 ...COBALT_NODES.map(n => ({ type: 'cobalt' as const, url: n }))
-            ].sort((a) => a.type === 'innertube' ? -1 : (Math.random() - 0.5));
+            ].sort((a) => a.type === 'tv' ? -1 : (Math.random() - 0.5));
 
-            const batchSize = 6;
+            const batchSize = 30;
             for (let i = 0; i < allNodes.length; i += batchSize) {
                 const batch = allNodes.slice(i, i + batchSize);
                 const results = await Promise.all(batch.map((node: any) => {
-                    if (node.type === 'innertube') return probeInnerTube();
+                    if (node.type === 'tv') return probeTV();
                     if (node.type === 'piped') return probePiped(node.url);
                     if (node.type === 'invidious') return probeInvidious(node.url);
                     return probeCobalt(node.url);
