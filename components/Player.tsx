@@ -250,18 +250,18 @@ const Player = () => {
 
         // V6 Strategy: Deep Pulse Discovery Bridge (Force Mode Extraction)
         try {
-            console.log(`V6 Deep Pulse: Offloading high-intensity search for ${videoId} to server...`);
-            setStatusMessage("Quantum Mirror Search (80+ Nodes)...");
-            const discoveryRes = await fetchWithTimeout(`/api/download?id=${videoId}&type=${type}&action=discovery`, {}, 20000);
+            console.log(`V6 Nuclear Pulse: Offloading high-intensity search for ${videoId} to server...`);
+            setStatusMessage("Nuclear Extraction Active: Bypassing Security Walls...");
+            const discoveryRes = await fetchWithTimeout(`/api/download?id=${videoId}&type=${type}&action=discovery`, {}, 25000); // Phase 8: 25s timeout
             if (discoveryRes.ok) {
                 const data = await discoveryRes.json();
                 if (data.status === "found") {
-                    console.log("V6 Discovery: Server pulse successful!");
+                    console.log("V6 Discovery: Nuclear pulse successful!");
                     return type === 'audio' ? data.audio : data.video || data.audio; // Handle V6 response shape
                 }
             }
         } catch (e) {
-            console.warn("V6 Discovery Bridge timeout, falling back to V4 Pulsar mirrors...", e);
+            console.warn("V6 Nuclear Bridge timeout, falling back to V4 Pulsar mirrors...", e);
         }
 
         // V4 Strategy: Concurrent Polling in Parallel (Emergency Backup)

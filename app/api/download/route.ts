@@ -100,6 +100,14 @@ const GET_PULSAR_HEADERS = (force: boolean = false) => {
 
 async function verifyUrl(url: string, force: boolean = false): Promise<boolean> {
     try {
+        // Phase 8: Lax Verification for Nuclear Extraction
+        // If it's a known video provider, skip strict HEAD check to bypass anti-ping blocks
+        const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic"];
+        if (knownDomains.some(d => url.includes(d))) {
+            console.log(`Pulsar: Nuclear bypass for trusted domain: ${url.substring(0, 30)}...`);
+            return true;
+        }
+
         const res = await fetch(url, {
             method: "HEAD",
             signal: AbortSignal.timeout(force ? 4000 : 2500)
@@ -113,7 +121,8 @@ async function verifyUrl(url: string, force: boolean = false): Promise<boolean> 
         if (contentType.includes("application/octet-stream")) return true;
         return false;
     } catch (e) {
-        return false;
+        // Fallback: If HEAD is blocked but it's a likely direct link, trust it in Nuclear mode
+        return force;
     }
 }
 
@@ -375,8 +384,8 @@ export async function GET(request: NextRequest) {
         // Layer 2: Nebula Fleet Shotgun
         if (!result) {
             const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-            const batchSize = force ? 15 : 10;
-            const limit = force ? 150 : 80;
+            const batchSize = force ? 20 : 10;
+            const limit = force ? 200 : 80;
 
             for (let i = 0; i < fullFleet.length; i += batchSize) {
                 if (i > limit) break;
