@@ -594,7 +594,7 @@ const Player = () => {
                                                 Analyzing YouTube protection layers...
                                             </span>
                                         )}
-                                        {hubStatus === 'scanning' || hubStatus === 'probing' && (
+                                        {(hubStatus === 'scanning' || hubStatus === 'probing') && (
                                             <span className="flex items-center gap-2 text-blue-400">
                                                 <Loader2 size={14} className="animate-spin" />
                                                 {statusMessage || "Quantum Mirror Search (400+ Nodes)..."}
