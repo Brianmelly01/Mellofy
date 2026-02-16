@@ -158,21 +158,17 @@ const Player = () => {
 
     // V4 ULTIMATE PROBE CONSTANTS
     const PIPED_NODES = [
-        "https://pipedapi.kavin.rocks",
-        "https://api.piped.privacydev.net",
-        "https://pipedapi.adminforge.de",
-        "https://pipedapi.leptons.xyz",
-        "https://pipedapi.recloud.me",
-        "https://piped-api.lunar.icu",
-        "https://api.piped.victr.me",
-        "https://pipedapi.tokyo.kappa.host"
+        "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
+        "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
+        "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
+        "https://api.piped.projectsegfault.lt", "https://piped-api.loli.net", "https://pipedapi.moemoe.me"
     ];
 
     const INVIDIOUS_NODES = [
         "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
         "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
         "https://invidious.lunar.icu", "https://iv.nautile.io", "https://iv.libRedirect.eu", "https://invidious.privacydev.net",
-        "https://iv.melmac.space", "https://invidious.snopyta.org", "https://invidious.kavin.rocks", "https://iv.okayme.com"
+        "https://inv.nadeko.net", "https://yewtu.be", "https://invidious.nerdvpn.de", "https://inv.tux.pizza"
     ];
 
     const COBALT_NODES = [
@@ -265,21 +261,53 @@ const Player = () => {
             return null;
         };
 
+        const probeInnerTube = async (): Promise<string | null> => {
+            try {
+                // Phase 15: Direct Source Spear (Android Client Mimicry)
+                const payload = {
+                    videoId,
+                    context: {
+                        client: {
+                            clientName: 'ANDROID',
+                            clientVersion: '19.12.35'
+                        }
+                    }
+                };
+                const res = await fetchWithTimeout(`https://www.youtube.com/youtubei/v1/player`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                }, 10000).catch(() => null);
+
+                if (res && res.ok) {
+                    const data = await res.json();
+                    const formats = data.streamingData?.adaptiveFormats || data.streamingData?.formats || [];
+                    const stream = type === 'audio'
+                        ? formats.find((f: any) => f.mimeType?.includes("audio/mp4"))
+                        : formats.find((f: any) => f.mimeType?.includes("video/mp4") && f.qualityLabel === "720p");
+                    return stream?.url || null;
+                }
+            } catch (e) { }
+            return null;
+        };
+
         // V4 Strategy: Unified High-Intensity Concurrent Shotgun (Singularity V11)
         try {
             console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
             setStatusMessage("Engaging Emergency Mirror Fleet...");
 
             const allNodes = [
+                { type: 'innertube' as const, url: 'direct' },
                 ...PIPED_NODES.map(n => ({ type: 'piped' as const, url: n })),
                 ...INVIDIOUS_NODES.map(n => ({ type: 'invidious' as const, url: n })),
                 ...COBALT_NODES.map(n => ({ type: 'cobalt' as const, url: n }))
-            ].sort(() => Math.random() - 0.5);
+            ].sort((a) => a.type === 'innertube' ? -1 : (Math.random() - 0.5));
 
             const batchSize = 6;
             for (let i = 0; i < allNodes.length; i += batchSize) {
                 const batch = allNodes.slice(i, i + batchSize);
-                const results = await Promise.all(batch.map(node => {
+                const results = await Promise.all(batch.map((node: any) => {
+                    if (node.type === 'innertube') return probeInnerTube();
                     if (node.type === 'piped') return probePiped(node.url);
                     if (node.type === 'invidious') return probeInvidious(node.url);
                     return probeCobalt(node.url);

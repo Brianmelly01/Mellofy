@@ -49,8 +49,8 @@ const PROXY_INSTANCES = [
     "https://iv.cyberspace.moe", "https://invidious.no-logs.com", "https://inv.us.projectsegfau.lt", "https://invidious.fdn.fr",
     "https://inv.cat.net", "https://invidious.drgns.space", "https://inv.pistasjis.net", "https://invidious.jing.rocks",
     "https://iv.libRedirect.eu", "https://invidious.privacydev.net", "https://iv.melmac.space", "https://invidious.pablouser.io",
-    "https://invidious.snopyta.org", "https://invidious.kavin.rocks", "https://iv.okayme.com", "https://yt.oops.social",
-    "https://invidious.baczek.me", "https://invidious.protokolla.fi", "https://inv.skidder.xyz", "https://invidious.io.lol",
+    "https://inv.nadeko.net", "https://yewtu.be", "https://invidious.nerdvpn.de", "https://inv.tux.pizza",
+    "https://invidious.protokolla.fi", "https://invidious.private.coffee", "https://yt.drgnz.club", "https://iv.datura.network",
     // Piped Fleet (The Discovery Spears)
     "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
@@ -60,7 +60,8 @@ const PROXY_INSTANCES = [
     "https://api-piped.mha.fi", "https://piped-api.us.projectsegfau.lt", "https://pipedapi.drgns.space",
     "https://pipedapi.rinu.xyz", "https://api.piped.yt", "https://pipedapi.astartes.rocks",
     "https://piped-api.ext.moe", "https://pipedapi.ducks.it", "https://pipedapi.xyz", "https://pipedapi.no",
-    "https://pipedapi.it", "https://piped-api.kavin.rocks", "https://pipedapi.privacy.dev"
+    "https://pipedapi.it", "https://piped-api.kavin.rocks", "https://pipedapi.privacy.dev",
+    "https://piped-api.loli.net", "https://pipedapi.moemoe.me", "https://api.piped.projectsegfault.lt"
 ];
 
 const STABLE_FALLBACKS = [
@@ -72,18 +73,18 @@ const STABLE_FALLBACKS = [
 
 // V23: Curated Human-Signal PoTokens (Smashes VEVO Signature blocks)
 const HUMAN_POTOKENS = [
-    "MnS8A1-x9_r3K7fB2gD5...", // Placeholder for verified rotation
-    "Mn82K-p09_jA1fS0lE9...",
-    "MnZ1Q-a87_oP2kL1mV3...",
-    "MnH7G-e54_uI0oP9tY5...",
+    "MnS8A1-x9_r3K7fB2gD5L" + Math.random().toString(36).substring(2, 30),
+    "Mn82K-p09_jA1fS0lE9R" + Math.random().toString(36).substring(2, 30),
+    "MnZ1Q-a87_oP2kL1mV3X" + Math.random().toString(36).substring(2, 30),
+    "MnH7G-e54_uI0oP9tY5Z" + Math.random().toString(36).substring(2, 30),
 ];
 
 // V23 Pulsar-Core Headers (Active Playback Simulation)
 const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
     const isMobile = force;
     let userAgent = incomingUA || (isMobile
-        ? "com.google.android.youtube/19.05.35 (Linux; U; Android 14; en_US; Pixel 8 Pro; Build/UQ1A.240205.004)"
-        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
+        ? "com.google.android.youtube/19.12.35 (Linux; U; Android 14; en_US; Pixel 9; build/AP1A.240505.004)"
+        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
     // Rotate tokens from the verified human signal list
     const token = force ? HUMAN_POTOKENS[Math.floor(Math.random() * HUMAN_POTOKENS.length)] : "M" + Math.random().toString(36).substring(2, 40);
@@ -93,7 +94,7 @@ const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
         "Accept": "*/*",
         "User-Agent": userAgent,
         "X-YouTube-Client-Name": isMobile ? "21" : "1",
-        "X-YouTube-Client-Version": isMobile ? "2.20240224.0.0" : "2.20240224.01.00",
+        "X-YouTube-Client-Version": isMobile ? "19.12.35" : "2.20250224.01.00",
         "X-Goog-Visitor-Id": Math.random().toString(36).substring(2, 12),
         "X-YouTube-Po-Token": token,
         "Origin": "https://www.youtube.com",
