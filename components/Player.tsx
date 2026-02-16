@@ -259,7 +259,10 @@ const Player = () => {
 
         const probePremium = async (): Promise<string | null> => {
             try {
-                // Phase 18: Premium-Spear (Relayed, Max-Trust Mimicry)
+                // Phase 19: Chronos Engine (STS Sync + Cipher Recognition)
+                const stsRes = await fetch("/api/download?action=sts").catch(() => null);
+                const { sts } = stsRes ? await stsRes.json() : { sts: "20147" };
+
                 const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`https://www.youtube.com/youtubei/v1/player`)}&force=true`;
                 const payload = {
                     videoId,
@@ -273,7 +276,7 @@ const Player = () => {
                     },
                     playbackContext: {
                         contentPlaybackContext: {
-                            signatureTimestamp: Math.floor(Date.now() / 1000) - 1000
+                            signatureTimestamp: parseInt(sts)
                         }
                     }
                 };
@@ -285,11 +288,22 @@ const Player = () => {
 
                 if (res && res.ok) {
                     const data = await res.json();
-                    const formats = data.streamingData?.adaptiveFormats || data.streamingData?.formats || [];
-                    const stream = type === 'audio'
-                        ? formats.find((f: any) => f.mimeType?.includes("audio/mp4"))
-                        : formats.find((f: any) => f.mimeType?.includes("video/mp4") && f.qualityLabel === "720p");
-                    return stream?.url || null;
+                    const formats = [...(data.streamingData?.adaptiveFormats || []), ...(data.streamingData?.formats || [])];
+                    const targetMime = type === 'audio' ? "audio/mp4" : "video/mp4";
+                    const format = formats.find((f: any) => f.mimeType?.includes(targetMime) && (type === 'audio' || f.qualityLabel === "720p")) || formats[0];
+
+                    if (format) {
+                        if (format.url) return format.url;
+                        if (format.signatureCipher || format.cipher) {
+                            // Phase 19: Relay to Decipher Bridge
+                            const c = format.signatureCipher || format.cipher;
+                            const decRes = await fetch(`/api/download?action=decipher&cipher=${encodeURIComponent(c)}`).catch(() => null);
+                            if (decRes && decRes.ok) {
+                                const decData = await decRes.json();
+                                return decData.url || null;
+                            }
+                        }
+                    }
                 }
             } catch (e) { }
             return null;
