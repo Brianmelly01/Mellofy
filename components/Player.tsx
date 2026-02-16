@@ -184,11 +184,30 @@ const Player = () => {
         "https://invidious.drgns.space"
     ];
 
+    const PIPED_INSTANCES = [
+        "https://pipedapi.kavin.rocks",
+        "https://pipedapi.tokyo.kappa.host",
+        "https://api.piped.victr.me"
+    ];
+
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
+        const fetchWithTimeout = async (url: string, options: any, timeout = 5000) => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(id);
+                return response;
+            } catch (e) {
+                clearTimeout(id);
+                throw e;
+            }
+        };
+
         // 1. Try Cobalt Instances
         for (const instance of COBALT_PUBLIC_INSTANCES) {
             try {
-                const response = await fetch(`${instance}/api/json`, {
+                const response = await fetchWithTimeout(`${instance}/api/json`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -201,8 +220,7 @@ const Player = () => {
                         youtubeVideoCodec: "h264",
                         audioFormat: "best",
                         filenamePattern: "basic"
-                    }),
-                    signal: AbortSignal.timeout(5000)
+                    })
                 });
 
                 if (!response.ok) continue;
@@ -213,21 +231,39 @@ const Player = () => {
                 if (data.picker && data.picker.length > 0) return data.picker[0].url;
 
             } catch (e) {
-                // console.warn(`Client-side probe failed for ${instance}:`, e);
+                // Silently continue
             }
         }
 
-        // 2. Try Invidious API (Backup)
+        // 2. Try Piped API (Very robust)
+        for (const instance of PIPED_INSTANCES) {
+            try {
+                const response = await fetchWithTimeout(`${instance}/streams/${videoId}`, {
+                    headers: { "Accept": "application/json" }
+                });
+                if (!response.ok) continue;
+                const data = await response.json();
+
+                if (type === 'audio' && data.audioStreams && data.audioStreams.length > 0) {
+                    // Get highest quality audio
+                    return data.audioStreams[0].url;
+                } else if (type === 'video' && data.videoStreams && data.videoStreams.length > 0) {
+                    // Prefer non-dash video for direct download if possible, else just first one
+                    const vd = data.videoStreams.find((s: any) => !s.videoOnly) || data.videoStreams[0];
+                    return vd.url;
+                }
+            } catch (e) { }
+        }
+
+        // 3. Try Invidious API (Backup)
         for (const instance of INVIDIOUS_INSTANCES) {
             try {
-                const response = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-                    headers: { "Accept": "application/json" },
-                    signal: AbortSignal.timeout(5000)
+                const response = await fetchWithTimeout(`${instance}/api/v1/videos/${videoId}`, {
+                    headers: { "Accept": "application/json" }
                 });
                 if (!response.ok) continue;
                 const data = await response.json();
                 if (data.formatStreams) {
-                    // Find bext stream
                     const stream = data.formatStreams.find((s: any) =>
                         type === 'audio' ? (s.audioQuality && s.container === 'm4a') : (s.resolution === '720p' && s.container === 'mp4')
                     );

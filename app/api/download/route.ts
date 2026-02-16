@@ -67,10 +67,10 @@ const PROXY_INSTANCES = [
 ];
 
 const STABLE_FALLBACKS = [
+    "https://cobalt.tools",
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
     "https://co.eepy.moe",
-    "https://cobalt.best",
 ];
 
 // V23: Curated Human-Signal PoTokens (Smashes VEVO Signature blocks)
@@ -359,7 +359,7 @@ export async function GET(request: NextRequest) {
     if (type === "both") {
         const [audio, video] = await Promise.all([probeType("audio"), probeType("video")]);
         const bestNodes = STABLE_FALLBACKS.sort(() => Math.random() - 0.5);
-        const fallbackUrl = `${bestNodes[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+        const fallbackUrl = `${bestNodes[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
 
         return NextResponse.json({
             audio: audio ? { url: audio.url, filename: `${audio.title}.m4a` } : null,
@@ -376,7 +376,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             audio: type === "audio" ? resultObj : null,
             video: type === "video" ? resultObj : null,
-            fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
+            fallbackUrl: `${STABLE_FALLBACKS[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
             status: "ready",
             ghostProtocolEnabled: true
         });
@@ -386,7 +386,7 @@ export async function GET(request: NextRequest) {
         audio: null,
         video: null,
         error: "Pulsar-Core Handshake failed. Initiating Zero-Signature Tunnel...",
-        fallbackUrl: `${STABLE_FALLBACKS[0]}/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
+        fallbackUrl: `${STABLE_FALLBACKS[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
         ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`,
         ghostProtocolEnabled: true,
         status: "fallback_required"
