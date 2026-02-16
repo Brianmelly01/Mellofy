@@ -121,45 +121,23 @@ const Player = () => {
         setShowDownloadMenu(false);
 
         try {
-            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}`);
+            console.log("Warp Tunneling: Initializing high-intensity discovery...");
+            setStatusMessage("Nuclear Extraction Active: Bypassing Security Walls...");
+            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}&action=discovery`, { signal: AbortSignal.timeout(30000) });
             const data = await response.json();
 
-            setExtractionLayer('verifying');
-            setHubResults({
-                audio: data.audio,
-                video: data.video,
-                fallbackUrl: data.fallbackUrl
-            });
-
-            if (data.status === 'ready') {
-                // Test accessibility
-                let audioOk = data.audio ? await testUrlAccessibility(data.audio.url) : true;
-                let videoOk = data.video ? await testUrlAccessibility(data.video.url) : true;
-
-                if (!audioOk || !videoOk) {
-                    console.log("Direct download failed. Falling back to tunnel with discovered URLs.");
-                    // Pass the discovered URLs to the tunnel for server-side proxying
-                    handleGhostProtocol(type, {
-                        audioUrl: data.audio?.url || null,
-                        videoUrl: data.video?.url || null
-                    });
-                } else {
-                    setHubStatus('ready');
-                    if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
-                    if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
-                    if (type === 'both') {
-                        if (data.audio) triggerLink(data.audio.url, data.audio.filename);
-                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
-                    }
-                }
-            } else if (data.ghostProtocolEnabled) {
-                handleGhostProtocol(type);
+            if (data.status === 'found') {
+                console.log("Warp Protocol: Link found! Engaging Ghost Tunnel...");
+                handleGhostProtocol(type, {
+                    audioUrl: data.audio || null,
+                    videoUrl: data.video || null
+                });
             } else {
-                console.log("Status not ready, engaging Ghost Protocol...");
+                console.log("Warp Protocol: Discovery exhausted. Triggering last-resort tunnel...");
                 handleGhostProtocol(type);
             }
         } catch (err) {
-            console.error("Download probe failed, engaging Ghost Protocol...", err);
+            console.error("Warp Protocol: Discovery timed out, engaging Emergency Tunnel...", err);
             handleGhostProtocol(type);
         }
     };
@@ -600,10 +578,10 @@ const Player = () => {
                                                 Analyzing YouTube protection layers...
                                             </span>
                                         )}
-                                        {hubStatus === 'scanning' && (
+                                        {hubStatus === 'scanning' || hubStatus === 'probing' && (
                                             <span className="flex items-center gap-2 text-blue-400">
                                                 <Loader2 size={14} className="animate-spin" />
-                                                {statusMessage || "Searching global mirrors..."}
+                                                {statusMessage || "Quantum Mirror Search (200+ Nodes)..."}
                                             </span>
                                         )}
                                         {hubStatus === 'tunneling' && (
@@ -640,10 +618,10 @@ const Player = () => {
                                             Targeted Force Unlock
                                         </button>
                                         <button
-                                            onClick={() => handleGhostProtocol('both')}
+                                            onClick={() => handleDownload('both')}
                                             className="w-full py-3 rounded-xl font-medium text-xs text-white/40 hover:text-white/60 transition-all"
                                         >
-                                            Retry Auto-Tunnel
+                                            Re-Attempt Warp Tunnel
                                         </button>
                                     </div>
                                 )}

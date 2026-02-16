@@ -289,15 +289,21 @@ export async function GET(request: NextRequest) {
 
             let result: { url: string; title: string } | null = null;
 
-            // === PHASE 1: Try Fleet (Cobalt/Invidious) ===
+            // === PHASE 1: Try Fleet (Omega Shotgun V9) ===
             if (!skipProbe) {
                 const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-                const batchSize = 10;
-                for (let i = 0; i < 30; i += batchSize) {
+                const batchSize = 20;
+                const limit = 200;
+
+                for (let i = 0; i < fullFleet.length; i += batchSize) {
+                    if (i > limit) break;
                     const batch = fullFleet.slice(i, i + batchSize);
-                    const results = await Promise.all(batch.map(instance =>
-                        instance.includes("cobalt") ? tryCobalt(instance, videoId, type === "audio" ? "audio" : "video", true) : tryInvidious(instance, videoId, type === "audio" ? "audio" : "video", true)
-                    ));
+                    const results = await Promise.all(batch.map(instance => {
+                        const t = type === "audio" ? "audio" : "video";
+                        if (instance.includes("cobalt")) return tryCobalt(instance, videoId, t, true);
+                        if (instance.includes("piped")) return tryPiped(instance, videoId, t, true);
+                        return tryInvidious(instance, videoId, t, true);
+                    }));
                     const found = results.find(res => res !== null);
                     if (found) { result = found; break; }
                 }
