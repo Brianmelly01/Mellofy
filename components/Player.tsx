@@ -174,24 +174,33 @@ const Player = () => {
         "https://cobalt.razor.sh",
         "https://cobalt.synack.me",
         "https://cobalt.154.53.56.155.nip.io",
-        "https://cobalt.timelessances.com"
+        "https://cobalt.timelessances.com",
+        "https://co.wuk.sh",
+        "https://cobalt.03c8.net"
     ];
 
     const INVIDIOUS_INSTANCES = [
         "https://vid.puffyan.us",
         "https://invidious.flokinet.to",
         "https://inv.vern.cc",
-        "https://invidious.drgns.space"
+        "https://invidious.drgns.space",
+        "https://iv.ggtyler.dev",
+        "https://invidious.projectsegfau.lt",
+        "https://iv.n0p.me",
+        "https://invidious.namazso.eu"
     ];
 
     const PIPED_INSTANCES = [
         "https://pipedapi.kavin.rocks",
         "https://pipedapi.tokyo.kappa.host",
-        "https://api.piped.victr.me"
+        "https://api.piped.victr.me",
+        "https://pipedapi.recloud.me",
+        "https://pipedapi.leptons.xyz",
+        "https://api.piped.privacydev.net"
     ];
 
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
-        const fetchWithTimeout = async (url: string, options: any, timeout = 5000) => {
+        const fetchWithTimeout = async (url: string, options: any, timeout = 7000) => {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeout);
             try {
@@ -204,7 +213,41 @@ const Player = () => {
             }
         };
 
-        // 1. Try Cobalt Instances
+        const tryAllOrigins = async (url: string) => {
+            try {
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const res = await fetchWithTimeout(proxyUrl, {});
+                if (!res.ok) return null;
+                const data = await res.json();
+                return JSON.parse(data.contents);
+            } catch (e) {
+                return null;
+            }
+        };
+
+        // 1. Try Piped API (Most reliable as it proxies streams)
+        for (const instance of PIPED_INSTANCES) {
+            try {
+                // Try direct first, then proxy
+                let data = null;
+                try {
+                    const res = await fetchWithTimeout(`${instance}/streams/${videoId}`, { headers: { "Accept": "application/json" } });
+                    if (res.ok) data = await res.json();
+                } catch (e) { }
+
+                if (!data) data = await tryAllOrigins(`${instance}/streams/${videoId}`);
+
+                if (data && data.audioStreams && data.audioStreams.length > 0) {
+                    if (type === 'audio') return data.audioStreams[0].url;
+                    if (type === 'video' && data.videoStreams && data.videoStreams.length > 0) {
+                        const vd = data.videoStreams.find((s: any) => !s.videoOnly) || data.videoStreams[0];
+                        return vd.url;
+                    }
+                }
+            } catch (e) { }
+        }
+
+        // 2. Try Cobalt Instances
         for (const instance of COBALT_PUBLIC_INSTANCES) {
             try {
                 const response = await fetchWithTimeout(`${instance}/api/json`, {
@@ -225,45 +268,24 @@ const Player = () => {
 
                 if (!response.ok) continue;
                 const data = await response.json();
-
                 if (data.status === "error") continue;
                 if (data.url) return data.url;
                 if (data.picker && data.picker.length > 0) return data.picker[0].url;
-
-            } catch (e) {
-                // Silently continue
-            }
-        }
-
-        // 2. Try Piped API (Very robust)
-        for (const instance of PIPED_INSTANCES) {
-            try {
-                const response = await fetchWithTimeout(`${instance}/streams/${videoId}`, {
-                    headers: { "Accept": "application/json" }
-                });
-                if (!response.ok) continue;
-                const data = await response.json();
-
-                if (type === 'audio' && data.audioStreams && data.audioStreams.length > 0) {
-                    // Get highest quality audio
-                    return data.audioStreams[0].url;
-                } else if (type === 'video' && data.videoStreams && data.videoStreams.length > 0) {
-                    // Prefer non-dash video for direct download if possible, else just first one
-                    const vd = data.videoStreams.find((s: any) => !s.videoOnly) || data.videoStreams[0];
-                    return vd.url;
-                }
             } catch (e) { }
         }
 
-        // 3. Try Invidious API (Backup)
+        // 3. Try Invidious API
         for (const instance of INVIDIOUS_INSTANCES) {
             try {
-                const response = await fetchWithTimeout(`${instance}/api/v1/videos/${videoId}`, {
-                    headers: { "Accept": "application/json" }
-                });
-                if (!response.ok) continue;
-                const data = await response.json();
-                if (data.formatStreams) {
+                let data = null;
+                try {
+                    const res = await fetchWithTimeout(`${instance}/api/v1/videos/${videoId}`, { headers: { "Accept": "application/json" } });
+                    if (res.ok) data = await res.json();
+                } catch (e) { }
+
+                if (!data) data = await tryAllOrigins(`${instance}/api/v1/videos/${videoId}`);
+
+                if (data && data.formatStreams) {
                     const stream = data.formatStreams.find((s: any) =>
                         type === 'audio' ? (s.audioQuality && s.container === 'm4a') : (s.resolution === '720p' && s.container === 'mp4')
                     );
@@ -377,7 +399,7 @@ const Player = () => {
         } catch (e) {
             console.error("All tunnel attempts failed:", e);
             setHubStatus('fallback');
-            setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
+            setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
         }
     };
 
@@ -579,7 +601,7 @@ const Player = () => {
                                             </div>
                                         )}
                                         {hubStatus === 'ready' && "Download initiated check your downloads folder."}
-                                        {hubStatus === 'fallback' && "Automatic download failed. Use the external link below."}
+                                        {hubStatus === 'fallback' && "YouTube protection detected. Use the secure methods below."}
                                     </div>
                                 </div>
 
