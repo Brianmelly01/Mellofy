@@ -25,13 +25,17 @@ const SearchInput = () => {
     }, [debouncedValue, router]);
 
     return (
-        <div className="relative">
-            <Search className="absolute top-3 left-3 text-neutral-400" size={20} />
+        <div className="relative group">
+            <Search
+                className="absolute top-1/2 -translate-y-1/2 left-4 text-neutral-500 group-focus-within:text-white transition-colors"
+                size={22}
+                strokeWidth={2.5}
+            />
             <input
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                placeholder="What do you want to listen to?"
-                className="w-full h-10 rounded-full bg-neutral-800 border-none outline-none text-white px-10 focus:ring-2 focus:ring-white/10"
+                placeholder="Artists, songs, or podcasts"
+                className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 outline-none text-white px-12 text-base font-medium placeholder:text-neutral-500 transition-all focus:bg-white/10 focus:ring-2 focus:ring-white/5 focus:border-white/20 shadow-xl"
             />
         </div>
     );

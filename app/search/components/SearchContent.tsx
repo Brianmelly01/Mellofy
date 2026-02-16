@@ -87,23 +87,24 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     }
 
     return (
-        <div className="flex flex-col gap-y-2 w-full px-6 pb-20">
+        <div className="flex flex-col gap-y-3 w-full pb-20">
             {results.map((song) => (
                 <div
                     key={song.id}
-                    className="flex items-center gap-x-4 w-full group hover:bg-neutral-800/40 p-3 rounded-xl transition cursor-pointer border border-transparent hover:border-white/5"
+                    className="flex items-center gap-x-4 w-full group hover:bg-white/5 p-2 rounded-[20px] transition-all cursor-pointer border border-transparent hover:border-white/5"
                 >
-                    <div className="flex-1 flex items-center gap-x-4">
-                        <div className="relative h-12 w-12 min-w-[48px] overflow-hidden rounded-md">
+                    <div className="flex-1 flex items-center gap-x-4 min-w-0">
+                        <div className="relative h-14 w-14 min-w-[56px] overflow-hidden rounded-xl shadow-lg">
                             <img
                                 src={song.thumbnail}
                                 alt="Thumbnail"
-                                className="h-full w-full object-cover"
+                                className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
                             />
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
                         </div>
                         <div className="flex flex-col truncate">
-                            <p className="text-white font-semibold truncate text-base">{song.title}</p>
-                            <div className="flex items-center gap-x-2 text-neutral-400 text-sm">
+                            <p className="text-white font-black truncate text-base tracking-tight">{song.title}</p>
+                            <div className="flex items-center gap-x-2 text-neutral-400 text-xs font-bold tracking-wide uppercase">
                                 <span className="truncate">{song.artist}</span>
                                 {song.duration && (
                                     <>
@@ -115,22 +116,20 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-x-2 opacity-0 group-hover:opacity-100 transition translate-x-2 group-hover:translate-x-0">
+                    <div className="flex items-center gap-x-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0 pr-2">
                         <button
                             onClick={() => handlePlay(song, 'audio')}
-                            className="flex items-center gap-x-2 bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 rounded-full text-xs font-bold text-white transition border border-white/10"
+                            className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10"
                             title="Play Audio"
                         >
-                            <Music size={14} />
-                            Audio
+                            <Music size={18} strokeWidth={2.5} />
                         </button>
                         <button
                             onClick={() => handlePlay(song, 'video')}
-                            className="flex items-center gap-x-2 bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-full text-xs font-bold text-white transition shadow-lg shadow-emerald-600/20"
+                            className="p-3 pulsar-bg hover:scale-105 rounded-full text-white transition-all shadow-lg shadow-purple-500/20"
                             title="Play Video"
                         >
-                            <Video size={14} />
-                            Video
+                            <Video size={18} strokeWidth={2.5} />
                         </button>
                     </div>
                 </div>
