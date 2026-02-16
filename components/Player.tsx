@@ -409,7 +409,11 @@ const Player = () => {
         } catch (e) {
             console.error("All tunnel attempts failed:", e);
             setHubStatus('fallback');
-            setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
+            // Auto-Targeting: Pre-fill Cobalt with the highest-reliability mirror
+            setHubResults(prev => ({
+                ...prev,
+                fallbackUrl: `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`
+            }));
         }
     };
 
@@ -622,22 +626,45 @@ const Player = () => {
                                 </div>
 
                                 {/* Universal Acquisition Button */}
-                                {(hubStatus === 'tunneling' || hubStatus === 'fallback') && (
+                                {hubStatus === 'fallback' && (
+                                    <div className="w-full space-y-2">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                            <span className="text-[10px] text-orange-400 font-bold uppercase tracking-widest">Recovery Recommended</span>
+                                        </div>
+                                        <button
+                                            onClick={() => window.open(hubResults.fallbackUrl || `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                            className="w-full py-4 rounded-xl font-bold uppercase tracking-widest bg-orange-500/10 text-orange-400 border border-orange-500/30 hover:bg-orange-500/20 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Shield size={18} />
+                                            Targeted Force Unlock
+                                        </button>
+                                        <button
+                                            onClick={() => handleGhostProtocol('both')}
+                                            className="w-full py-3 rounded-xl font-medium text-xs text-white/40 hover:text-white/60 transition-all"
+                                        >
+                                            Retry Auto-Tunnel
+                                        </button>
+                                    </div>
+                                )}
+                                {hubStatus === 'tunneling' && (
                                     <button
-                                        disabled={hubStatus === 'tunneling'}
+                                        disabled={true}
+                                        className="w-full py-4 rounded-xl font-bold uppercase tracking-widest bg-purple-900/50 text-purple-300 border border-purple-500/30 cursor-not-allowed opacity-80 flex items-center justify-center gap-2"
+                                    >
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Tunneling Active...
+                                    </button>
+                                )}
+                                {(hubStatus !== 'tunneling' && hubStatus !== 'fallback' && hubStatus !== 'scanning' && hubStatus !== 'probing') && (
+                                    <button
                                         onClick={() => handleGhostProtocol('both')}
-                                        className={cn(
-                                            "w-full py-4 rounded-xl font-bold uppercase tracking-widest transition-all duration-500 shadow-lg flex items-center justify-center gap-2 group mb-6 border-b-2",
-                                            hubStatus === 'tunneling'
-                                                ? "bg-purple-900/50 text-purple-300 border-purple-500/30 cursor-not-allowed opacity-80"
-                                                : "bg-[#1DB954] text-black border-[#1DB954]/50 hover:scale-[1.02] hover:bg-[#1ed760] active:scale-95 shadow-[#1DB954]/20"
-                                        )}
+                                        className="w-full py-4 rounded-xl font-bold uppercase tracking-widest bg-[#1DB954] text-black border-b-2 border-[#1DB954]/50 hover:scale-[1.02] hover:bg-[#1ed760] active:scale-95 transition-all flex items-center justify-center gap-2"
                                     >
                                         <div className="relative">
-                                            <Music size={18} className={cn(hubStatus === 'tunneling' && "animate-bounce")} />
-                                            {hubStatus === 'tunneling' && <div className="absolute inset-0 bg-purple-400/50 blur-lg animate-pulse rounded-full" />}
+                                            <Music size={18} />
                                         </div>
-                                        {hubStatus === 'tunneling' ? "Tunneling Active..." : "Tunnel Both (Audio + Video)"}
+                                        Tunnel Both (Audio + Video)
                                     </button>
                                 )}
                                 <div className={cn(

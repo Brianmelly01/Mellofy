@@ -4,6 +4,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // OMEGA FLEET V23: Pulsar-Core (Zero-Signature Extraction)
+const PROXY_ROTATION = [
+    "https://api.allorigins.win/get?url=",
+    "https://corsproxy.io/?",
+    "https://proxy.cors.sh/",
+    "https://api.codetabs.com/v1/proxy?quest="
+];
+
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
@@ -156,18 +163,35 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
 }
 
 async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
+    const fetchWithProxy = async (url: string) => {
+        try {
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (res.ok) return await res.json();
+
+            // Phase 7: Infinity Bridge Proxy Fallback
+            console.log(`Piped [403/Fail]: Engaging Infinity Proxy for ${instance}...`);
+            for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
+                try {
+                    const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
+                    const pRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+                    if (pRes.ok) {
+                        const text = await pRes.text();
+                        const data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
+                        if (data) return data;
+                    }
+                } catch (pe) { }
+            }
+            return null;
+        } catch (e) { return null; }
+    };
+
     try {
-        const res = await fetch(`${instance}/streams/${videoId}`, {
-            headers: { "Accept": "application/json" },
-            signal: AbortSignal.timeout(force ? 15000 : 8000)
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
+        const data = await fetchWithProxy(`${instance}/streams/${videoId}`);
+        if (!data) return null;
 
         const streams = type === "audio" ? data.audioStreams : data.videoStreams;
         if (!streams || streams.length === 0) return null;
 
-        // Prioritize non-dash, high quality
         const stream = streams.find((s: any) => s.quality === (force ? "1080p" : "720p")) ||
             streams.find((s: any) => !s.videoOnly) ||
             streams[0];
@@ -180,13 +204,30 @@ async function tryPiped(instance: string, videoId: string, type: string, force: 
 }
 
 async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
+    const fetchWithProxy = async (url: string) => {
+        try {
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (res.ok) return await res.json();
+
+            console.log(`Invidious [403/Fail]: Engaging Infinity Proxy for ${instance}...`);
+            for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
+                try {
+                    const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
+                    const pRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+                    if (pRes.ok) {
+                        const text = await pRes.text();
+                        const data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
+                        if (data) return data;
+                    }
+                } catch (pe) { }
+            }
+            return null;
+        } catch (e) { return null; }
+    };
+
     try {
-        const res = await fetch(`${instance}/api/v1/videos/${videoId}?local=true`, {
-            headers: { "Accept": "application/json" },
-            signal: AbortSignal.timeout(force ? 15000 : 8000)
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
+        const data = await fetchWithProxy(`${instance}/api/v1/videos/${videoId}?local=true`);
+        if (!data) return null;
 
         const formats = data.adaptiveFormats || [];
         const format = type === "audio"
