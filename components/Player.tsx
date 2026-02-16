@@ -171,10 +171,21 @@ const Player = () => {
         "https://api.cobalt.tools",
         "https://cobalt.mayo.sh",
         "https://cobalt.meowing.de",
-        "https://cobalt.razor.sh"
+        "https://cobalt.razor.sh",
+        "https://cobalt.synack.me",
+        "https://cobalt.154.53.56.155.nip.io",
+        "https://cobalt.timelessances.com"
+    ];
+
+    const INVIDIOUS_INSTANCES = [
+        "https://vid.puffyan.us",
+        "https://invidious.flokinet.to",
+        "https://inv.vern.cc",
+        "https://invidious.drgns.space"
     ];
 
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
+        // 1. Try Cobalt Instances
         for (const instance of COBALT_PUBLIC_INSTANCES) {
             try {
                 const response = await fetch(`${instance}/api/json`, {
@@ -202,9 +213,29 @@ const Player = () => {
                 if (data.picker && data.picker.length > 0) return data.picker[0].url;
 
             } catch (e) {
-                console.warn(`Client-side probe failed for ${instance}:`, e);
+                // console.warn(`Client-side probe failed for ${instance}:`, e);
             }
         }
+
+        // 2. Try Invidious API (Backup)
+        for (const instance of INVIDIOUS_INSTANCES) {
+            try {
+                const response = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+                    headers: { "Accept": "application/json" },
+                    signal: AbortSignal.timeout(5000)
+                });
+                if (!response.ok) continue;
+                const data = await response.json();
+                if (data.formatStreams) {
+                    // Find bext stream
+                    const stream = data.formatStreams.find((s: any) =>
+                        type === 'audio' ? (s.audioQuality && s.container === 'm4a') : (s.resolution === '720p' && s.container === 'mp4')
+                    );
+                    if (stream) return stream.url;
+                }
+            } catch (e) { }
+        }
+
         return null;
     };
 
@@ -594,15 +625,39 @@ const Player = () => {
                                 </div>
                             </div>
 
-                            {/* External Acquisition Button */}
-                            {hubStatus === 'fallback' && hubResults.fallbackUrl && (
-                                <button
-                                    onClick={() => window.open(hubResults.fallbackUrl!, '_blank')}
-                                    className="w-full flex items-center justify-center gap-2 p-4 bg-amber-500 text-black rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition shadow-lg shadow-amber-500/20"
-                                >
-                                    <ExternalLink size={18} />
-                                    Open External Downloader
-                                </button>
+                            {/* External Acquisition Matrix */}
+                            {hubStatus === 'fallback' && (
+                                <div className="space-y-3">
+                                    <p className="text-xs text-center text-white/40 uppercase tracking-widest mb-2">
+                                        Manual Override Required
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => window.open(`https://cobalt.tools/?u=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                        >
+                                            <ExternalLink size={14} /> Cobalt (Auto)
+                                        </button>
+                                        <button
+                                            onClick={() => window.open(`https://cobalt.canine.tools/?u=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                        >
+                                            <ExternalLink size={14} /> Cobalt (Mirror)
+                                        </button>
+                                        <button
+                                            onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}&f=${playbackMode === 'audio' ? 'mp3' : 'mp4'}`, '_blank')}
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                        >
+                                            <ExternalLink size={14} /> Loader.to
+                                        </button>
+                                        <button
+                                            onClick={() => window.open(`https://www.y2mate.com/youtube/${currentTrack.id}`, '_blank')}
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                        >
+                                            <ExternalLink size={14} /> Y2Mate
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                         </div>
 
