@@ -21,6 +21,8 @@ body {
   font-family: var(--font-sans), sans-serif;
   overflow: hidden;
   user-select: none;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: none;
 }
 
 @theme inline {
@@ -50,9 +52,17 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.glass-heavy {
+  background: rgba(8, 8, 8, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

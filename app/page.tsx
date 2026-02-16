@@ -5,40 +5,79 @@ import Hero from "@/components/Hero";
 import HorizontalSection from "@/components/HorizontalSection";
 
 export default function Home() {
-  // Mock data for Phase 20 UI
-  const trendingTracks = [
-    { id: "1", title: "Starboy", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg" },
-    { id: "2", title: "Blinding Lights", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/fHI8X4OXn-g/maxresdefault.jpg" },
-    { id: "3", title: "Save Your Tears", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/XXYlFuWEuKI/maxresdefault.jpg" },
-    { id: "4", title: "The Hills", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/yzTuBuLH9M8/maxresdefault.jpg" },
-    { id: "5", title: "Can't Feel My Face", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/KEI4qSrkPAs/maxresdefault.jpg" },
+  // Phase 21 High-Fidelity Data (Matching Mockup)
+  const topPlaylists = [
+    {
+      id: "p1",
+      title: "Hits of",
+      artist: "the Moment",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/playlist_hits_moment_v2_1771266052746.png"
+    },
+    {
+      id: "p2",
+      title: "Chill Vibes",
+      artist: "Sunset Moods",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/playlist_chill_vibes_v2_1771266070675.png"
+    },
+    {
+      id: "p3",
+      title: "Afro Beats",
+      artist: "Global Rhythms",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/playlist_afro_beats_final_1771266193679.png"
+    },
   ];
 
-  const topPlaylists = [
-    { id: "p1", title: "Pulsar Beats", artist: "Curated by Mellofy", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=3540&auto=format&fit=crop" },
-    { id: "p2", title: "Synthwave Dreams", artist: "Neon Nights", thumbnail: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?q=80&w=3548&auto=format&fit=crop" },
-    { id: "p3", title: "Cyberpunk 2077", artist: "Night City Radio", thumbnail: "https://images.unsplash.com/photo-1605648916319-cf082f7524a1?q=80&w=3540&auto=format&fit=crop" },
-    { id: "p4", title: "Phonk Night", artist: "Drift Nation", thumbnail: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=3540&auto=format&fit=crop" },
+  const trendingTracks = [
+    {
+      id: "t1",
+      title: "Weekend Party",
+      artist: "DJ Stellar",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/track_weekend_party_1771266120787.png"
+    },
+    {
+      id: "t2",
+      title: "Lost in Love",
+      artist: "Mia Roberts",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/track_lost_love_1771266138653.png"
+    },
+    {
+      id: "t3",
+      title: "Rise Up",
+      artist: "Kings & Crew",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/track_rise_up_final_1771266208307.png"
+    },
+    {
+      id: "t4",
+      title: "On My Mind",
+      artist: "Lucas Drake",
+      thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/track_on_my_mind_final_v2_1771266263479.png"
+    },
   ];
 
   return (
-    <div className="bg-background rounded-lg h-full w-full overflow-hidden overflow-y-auto no-scrollbar">
+    <div className="bg-[#080808] h-full w-full overflow-hidden overflow-y-auto no-scrollbar">
       <Header />
-      <div className="px-4 md:px-8 pb-32">
+      <div className="px-5 md:px-8 pb-32">
+        {/* Welcome Section (Mockup Precise) */}
+        <div className="py-6 flex flex-col gap-y-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+            Welcome, Brian
+          </h1>
+          <p className="text-sm md:text-base text-neutral-400 font-medium">
+            Let's vibe with your favorite music
+          </p>
+        </div>
+
         <Hero />
-        <div className="mt-8 space-y-10">
+        <div className="mt-8 space-y-12">
           <HorizontalSection
-            title="Trending Now"
-            items={trendingTracks}
-          />
-          <HorizontalSection
-            title="Your Playlists"
+            title="Top Playlists"
             items={topPlaylists}
             isSquare
           />
           <HorizontalSection
-            title="Recently Played"
-            items={trendingTracks.slice().reverse()}
+            title="Trending Now"
+            items={trendingTracks}
           />
         </div>
       </div>

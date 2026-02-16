@@ -37,7 +37,7 @@ interface AcquisitionResults {
 
 const Player = () => {
     const {
-        currentTrack,
+        currentTrack: storeTrack,
         isPlaying,
         togglePlay,
         volume,
@@ -458,84 +458,80 @@ const Player = () => {
         }
     };
 
+    const currentTrack = storeTrack || {
+        id: "vibe-check",
+        title: "Feel the Vibe",
+        artist: "Mark Ellis",
+        thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/player_feel_the_vibe_1771266405368.png",
+        url: ""
+    };
+
     if (!currentTrack) return null;
 
     return (
         <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="w-full max-w-2xl mx-auto glass rounded-[32px] overflow-hidden p-2 shadow-2xl shadow-black/50"
+            className="w-full max-w-3xl mx-auto glass-heavy rounded-[40px] overflow-hidden p-2 shadow-2xl shadow-black/60 border border-white/10"
         >
             <PlayerContent />
-            <div className="flex items-center justify-between px-2 h-16 relative">
+            <div className="flex items-center justify-between px-3 h-20 relative">
                 {/* Track Info (Left) */}
-                <div className="flex items-center gap-x-3 w-1/3 min-w-0">
+                <div className="flex items-center gap-x-4 w-[40%] min-w-0">
                     <motion.div
                         whileHover={{ scale: 1.05 }}
-                        className="relative w-12 h-12 flex-shrink-0"
+                        className="relative w-14 h-14 flex-shrink-0"
                     >
                         <img
                             src={currentTrack.thumbnail || "/placeholder-music.png"}
                             alt="Thumbnail"
-                            className="w-full h-full rounded-2xl object-cover shadow-lg"
+                            className="w-full h-full rounded-2xl object-cover shadow-2xl"
                         />
-                        <div className="absolute inset-0 rounded-2xl border border-white/10" />
+                        <div className="absolute inset-0 rounded-2xl border border-white/20 shadow-inner" />
                     </motion.div>
                     <div className="flex flex-col truncate">
-                        <p className="text-white font-bold text-sm truncate leading-tight">
+                        <p className="text-white font-black text-base truncate leading-tight tracking-tight">
                             {currentTrack.title}
                         </p>
-                        <p className="text-neutral-400 text-[11px] font-medium truncate">
+                        <p className="text-neutral-400 text-xs font-bold truncate tracking-wide">
                             {currentTrack.artist}
                         </p>
                     </div>
                 </div>
 
-                {/* Progress & Info (Center) */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-y-1 mt-1">
-                    <div className="w-32 md:w-48 h-1 bg-white/10 rounded-full overflow-hidden relative group cursor-pointer">
+                {/* Progress (Center) */}
+                <div className="absolute left-1/2 top-[55%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-y-2 w-full max-w-[180px] md:max-w-[300px]">
+                    <div className="w-full h-1.5 bg-white/10 rounded-full relative cursor-pointer group">
+                        {/* Progress Fill */}
                         <motion.div
-                            className="absolute h-full pulsar-bg"
+                            className="absolute h-full pulsar-bg rounded-full"
                             style={{ width: `${progress * 100}%` }}
                         />
+                        {/* Progress Handle (Mockup Detail) */}
+                        <motion.div
+                            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-white/20"
+                            style={{ left: `calc(${progress * 100}% - 8px)` }}
+                        />
                     </div>
-                    <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">
-                        {playbackMode} Mode
-                    </span>
                 </div>
 
                 {/* Controls (Right) */}
-                <div className="flex items-center gap-x-2 w-1/3 justify-end">
-                    <div className="flex items-center gap-x-1 pr-2 border-r border-white/10 mr-1 hidden sm:flex">
-                        <button
-                            onClick={() => setPlaybackMode(playbackMode === 'audio' ? 'video' : 'audio')}
-                            className="p-2 text-neutral-400 hover:text-white transition"
-                        >
-                            {playbackMode === 'audio' ? <Music size={18} /> : <Video size={18} />}
-                        </button>
-                        <button
-                            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                            className="p-2 text-neutral-400 hover:text-white transition"
-                        >
-                            <Download size={18} />
-                        </button>
-                    </div>
-
+                <div className="flex items-center gap-x-3 w-[40%] justify-end pr-1">
                     <button
                         onClick={togglePlay}
-                        className="w-10 h-10 pulsar-bg rounded-full flex items-center justify-center hover:scale-105 transition-all shadow-lg"
+                        className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"
                     >
                         {isPlaying ? (
-                            <Pause size={18} className="text-white fill-white" />
+                            <Pause size={20} className="text-black fill-black" strokeWidth={3} />
                         ) : (
-                            <Play size={18} className="text-white fill-white ml-0.5" />
+                            <Play size={20} className="text-black fill-black ml-1" strokeWidth={3} />
                         )}
                     </button>
                     <button
                         onClick={playNext}
-                        className="p-2 text-neutral-400 hover:text-white transition"
+                        className="p-2 text-white hover:text-neutral-300 transition"
                     >
-                        <SkipForward size={22} />
+                        <SkipForward size={32} strokeWidth={2.5} />
                     </button>
                 </div>
             </div>
