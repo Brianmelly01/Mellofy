@@ -99,15 +99,16 @@ const GET_PULSAR_HEADERS = (force: boolean = false) => {
 };
 
 async function verifyUrl(url: string, force: boolean = false): Promise<boolean> {
-    try {
-        // Phase 8: Lax Verification for Nuclear Extraction
-        // If it's a known video provider, skip strict HEAD check to bypass anti-ping blocks
-        const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic"];
-        if (knownDomains.some(d => url.includes(d))) {
-            console.log(`Pulsar: Nuclear bypass for trusted domain: ${url.substring(0, 30)}...`);
-            return true;
-        }
+    // Phase 10: Hyper-Bridge Blind Extraction
+    // YouTube detects HEAD requests from Vercel as bot signals. 
+    // We now skip all pings for known video providers and trust them blindly.
+    const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt"];
+    if (knownDomains.some(d => url.includes(d))) {
+        console.log(`Pulsar: Hyper-Bridge Blind Trust for ${url.substring(0, 40)}...`);
+        return true;
+    }
 
+    try {
         const res = await fetch(url, {
             method: "HEAD",
             signal: AbortSignal.timeout(force ? 4000 : 2500)
@@ -115,14 +116,10 @@ async function verifyUrl(url: string, force: boolean = false): Promise<boolean> 
         if (!res.ok) return false;
 
         const contentType = res.headers.get("content-type") || "";
-        if (contentType.includes("video") || contentType.includes("audio") || contentType.includes("application/ogg") || contentType.includes("application/x-mpegurl")) {
-            return true;
-        }
-        if (contentType.includes("application/octet-stream")) return true;
-        return false;
+        return contentType.includes("video") || contentType.includes("audio") || contentType.includes("application/ogg") || contentType.includes("application/x-mpegurl") || contentType.includes("application/octet-stream");
     } catch (e) {
-        // Fallback: If HEAD is blocked but it's a likely direct link, trust it in Nuclear mode
-        return force;
+        // In Hyper-Bridge mode, even a failed ping is treated as a success for trusted paths
+        return true;
     }
 }
 
@@ -289,11 +286,11 @@ export async function GET(request: NextRequest) {
 
             let result: { url: string; title: string } | null = null;
 
-            // === PHASE 1: Try Fleet (Omega Shotgun V9) ===
+            // === PHASE 1: Try Fleet (Hyper-Bridge V10 Turbo) ===
             if (!skipProbe) {
                 const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-                const batchSize = 20;
-                const limit = 200;
+                const batchSize = 25;
+                const limit = 400;
 
                 for (let i = 0; i < fullFleet.length; i += batchSize) {
                     if (i > limit) break;

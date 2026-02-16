@@ -121,23 +121,24 @@ const Player = () => {
         setShowDownloadMenu(false);
 
         try {
-            console.log("Warp Tunneling: Initializing high-intensity discovery...");
-            setStatusMessage("Nuclear Extraction Active: Bypassing Security Walls...");
-            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}&action=discovery`, { signal: AbortSignal.timeout(30000) });
+            console.log("Hyper-Bridge: Deploying stealth warp discovery...");
+            setStatusMessage("Deploying Stealth Warp Tunnel: Intercepting Security...");
+            // Phase 10: 40s timeout for 400-node sweep
+            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}&action=discovery`, { signal: AbortSignal.timeout(40000) });
             const data = await response.json();
 
             if (data.status === 'found') {
-                console.log("Warp Protocol: Link found! Engaging Ghost Tunnel...");
+                console.log("Hyper-Bridge: Discovery successful. Handing over to Blind Tunnel...");
                 handleGhostProtocol(type, {
                     audioUrl: data.audio || null,
                     videoUrl: data.video || null
                 });
             } else {
-                console.log("Warp Protocol: Discovery exhausted. Triggering last-resort tunnel...");
+                console.log("Hyper-Bridge: Discovery exhausted. Triggering emergency blind tunnel...");
                 handleGhostProtocol(type);
             }
         } catch (err) {
-            console.error("Warp Protocol: Discovery timed out, engaging Emergency Tunnel...", err);
+            console.error("Hyper-Bridge: Stealth discovery timed out, engaging Emergency Tunnel...", err);
             handleGhostProtocol(type);
         }
     };
@@ -581,14 +582,14 @@ const Player = () => {
                                         {hubStatus === 'scanning' || hubStatus === 'probing' && (
                                             <span className="flex items-center gap-2 text-blue-400">
                                                 <Loader2 size={14} className="animate-spin" />
-                                                {statusMessage || "Quantum Mirror Search (200+ Nodes)..."}
+                                                {statusMessage || "Quantum Mirror Search (400+ Nodes)..."}
                                             </span>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-3">
                                                 <p className="flex items-center gap-2 text-sm text-white/90 font-medium">
                                                     <Loader2 size={16} className="animate-spin text-purple-500" />
-                                                    {downloadProgress > 0 ? `Downloading... ${downloadProgress}%` : "Deploying Quantum Shield Tunnel..."}
+                                                    {downloadProgress > 0 ? `Downloading... ${downloadProgress}%` : "Deploying Stealth Warp Tunnel..."}
                                                 </p>
                                                 <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
                                                     <div
