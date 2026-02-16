@@ -247,7 +247,22 @@ const Player = () => {
             return null;
         };
 
-        // V4 Strategy: Concurrent Polling in Parallel
+        // V5 Strategy: Backend Discovery Bridge (CORS Bypass)
+        try {
+            console.log(`V5 Discovery Bridge: Offloading search for ${videoId} to server...`);
+            const discoveryRes = await fetchWithTimeout(`/api/download?id=${videoId}&type=${type}&action=discovery`, {}, 15000);
+            if (discoveryRes.ok) {
+                const data = await discoveryRes.json();
+                if (data.status === "found") {
+                    console.log("V5 Discovery: Server found usable mirrors!");
+                    return type === 'audio' ? data.audio : data.url; // Handle both 'type=audio' and 'type=both' (default) response shapes
+                }
+            }
+        } catch (e) {
+            console.warn("V5 Discovery Bridge failed, falling back to V4 Pulsar mirrors...", e);
+        }
+
+        // V4 Strategy: Concurrent Polling in Parallel (Backup if bridge fails)
         try {
             console.log(`V4 Pulsar: Launching concurrent search for ${videoId}...`);
 

@@ -171,40 +171,49 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
     return result;
 }
 
-async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
+async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
     try {
-        const isInvidious = !instance.includes("piped");
-        const endpoint = isInvidious
-            ? `${instance}/api/v1/videos/${videoId}?local=true`
-            : `${instance}/streams/${videoId}`;
-
-        const res = await fetch(endpoint, {
-            headers: { "User-Agent": GET_PULSAR_HEADERS(force)["User-Agent"] },
+        const res = await fetch(`${instance}/streams/${videoId}`, {
+            headers: { "Accept": "application/json" },
             signal: AbortSignal.timeout(force ? 15000 : 8000)
         });
         if (!res.ok) return null;
         const data = await res.json();
 
-        if (isInvidious) {
-            const formats = data.adaptiveFormats || [];
-            const format = type === "audio"
-                ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
-                : (formats.find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
+        const streams = type === "audio" ? data.audioStreams : data.videoStreams;
+        if (!streams || streams.length === 0) return null;
 
-            if (format?.url && await verifyUrl(format.url, force)) {
-                return { url: format.url, title: data.title || "download" };
-            }
-        } else {
-            const streams = type === "audio" ? data.audioStreams : data.videoStreams;
-            const stream = streams?.find((s: any) => s.quality === (force ? "1080p" : "720p")) || streams?.find((s: any) => s.mimeType?.includes("mp4")) || (streams ? streams[0] : null);
-            if (stream?.url && await verifyUrl(stream.url, force)) {
-                return { url: stream.url, title: data.title || "download" };
-            }
+        // Prioritize non-dash, high quality
+        const stream = streams.find((s: any) => s.quality === (force ? "1080p" : "720p")) ||
+            streams.find((s: any) => !s.videoOnly) ||
+            streams[0];
+
+        if (stream?.url && await verifyUrl(stream.url, force)) {
+            return { url: stream.url, title: data.title || "download" };
         }
         return null;
-    } catch (e) {
+    } catch (e) { return null; }
+}
+
+async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
+    try {
+        const res = await fetch(`${instance}/api/v1/videos/${videoId}?local=true`, {
+            headers: { "Accept": "application/json" },
+            signal: AbortSignal.timeout(force ? 15000 : 8000)
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+
+        const formats = data.adaptiveFormats || [];
+        const format = type === "audio"
+            ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
+            : (formats.find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
+
+        if (format?.url && await verifyUrl(format.url, force)) {
+            return { url: format.url, title: data.title || "download" };
+        }
         return null;
-    }
+    } catch (e) { return null; }
 }
 
 export async function GET(request: NextRequest) {
@@ -340,21 +349,43 @@ export async function GET(request: NextRequest) {
         // Layer 2: Nebula Fleet Shotgun
         if (!result) {
             const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-            const batchSize = force ? 15 : 8;
-            const limit = force ? 120 : 64;
+            const batchSize = force ? 15 : 10;
+            const limit = force ? 150 : 80;
 
             for (let i = 0; i < fullFleet.length; i += batchSize) {
                 if (i > limit) break;
                 const batch = fullFleet.slice(i, i + batchSize);
-                const results = await Promise.all(batch.map(instance =>
-                    instance.includes("cobalt") ? tryCobalt(instance, videoId, t, force) : tryInvidious(instance, videoId, t, force)
-                ));
+                const results = await Promise.all(batch.map(instance => {
+                    if (instance.includes("cobalt")) return tryCobalt(instance, videoId, t, force);
+                    if (instance.includes("piped")) return tryPiped(instance, videoId, t, force);
+                    return tryInvidious(instance, videoId, t, force);
+                }));
                 result = results.find(r => r !== null);
                 if (result) break;
             }
         }
         return result;
     };
+
+    // === PHASE 5: Quantum Discovery Bridge ===
+    if (searchParams.get("action") === "discovery") {
+        console.log(`Quantum Discovery: Finding links for ${videoId} (${type})...`);
+        if (type === "both") {
+            const [audio, video] = await Promise.all([probeType("audio"), probeType("video")]);
+            return NextResponse.json({
+                audio: audio?.url || null,
+                video: video?.url || null,
+                title: audio?.title || video?.title || "download",
+                status: (audio || video) ? "found" : "failed"
+            });
+        }
+        const found = await probeType(type);
+        return NextResponse.json({
+            url: found?.url || null,
+            title: found?.title || "download",
+            status: found ? "found" : "failed"
+        });
+    }
 
     if (type === "both") {
         const [audio, video] = await Promise.all([probeType("audio"), probeType("video")]);
