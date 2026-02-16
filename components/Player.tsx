@@ -257,16 +257,23 @@ const Player = () => {
             return null;
         };
 
-        const probeTV = async (): Promise<string | null> => {
+        const probePremium = async (): Promise<string | null> => {
             try {
-                // Phase 17: TV-Client Spear (Relayed, Ultra-Trust)
+                // Phase 18: Premium-Spear (Relayed, Max-Trust Mimicry)
                 const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`https://www.youtube.com/youtubei/v1/player`)}&force=true`;
                 const payload = {
                     videoId,
                     context: {
                         client: {
                             clientName: 'TVHTML5',
-                            clientVersion: '7.20250224.01.00'
+                            clientVersion: '7.20250224.01.00',
+                            hl: 'en',
+                            gl: 'US'
+                        }
+                    },
+                    playbackContext: {
+                        contentPlaybackContext: {
+                            signatureTimestamp: Math.floor(Date.now() / 1000) - 1000
                         }
                     }
                 };
@@ -288,23 +295,23 @@ const Player = () => {
             return null;
         };
 
-        // V4 Strategy: Unified Ultra-Intensity Relayed Shotgun (Singularity V17)
+        // V4 Strategy: Unified Ultra-Intensity Relayed Shotgun (Omega Singularity V18)
         try {
             console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
             setStatusMessage("Engaging Emergency Mirror Fleet...");
 
             const allNodes = [
-                { type: 'tv' as const, url: 'direct' },
+                { type: 'premium' as const, url: 'direct' },
                 ...PIPED_NODES.map(n => ({ type: 'piped' as const, url: n })),
                 ...INVIDIOUS_NODES.map(n => ({ type: 'invidious' as const, url: n })),
                 ...COBALT_NODES.map(n => ({ type: 'cobalt' as const, url: n }))
-            ].sort((a) => a.type === 'tv' ? -1 : (Math.random() - 0.5));
+            ].sort((a) => a.type === 'premium' ? -1 : (Math.random() - 0.5));
 
             const batchSize = 30;
             for (let i = 0; i < allNodes.length; i += batchSize) {
                 const batch = allNodes.slice(i, i + batchSize);
                 const results = await Promise.all(batch.map((node: any) => {
-                    if (node.type === 'tv') return probeTV();
+                    if (node.type === 'premium') return probePremium();
                     if (node.type === 'piped') return probePiped(node.url);
                     if (node.type === 'invidious') return probeInvidious(node.url);
                     return probeCobalt(node.url);

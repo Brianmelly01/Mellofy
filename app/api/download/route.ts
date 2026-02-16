@@ -102,6 +102,10 @@ const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
         "X-YouTube-Client-Version": isTV ? "1.20250224.01.00" : (isMobile ? "19.12.35" : "2.20250224.01.00"),
         "X-Goog-Visitor-Id": Math.random().toString(36).substring(2, 12),
         "X-YouTube-Po-Token": token,
+        "X-Goog-Authuser": "0",
+        "X-Origin": "https://www.youtube.com",
+        "X-YouTube-Page-CL": "720000000",
+        "X-YouTube-Page-Label": "youtube.ytfe.desktop_20250224_01_RC00",
         "Origin": "https://www.youtube.com",
         "Referer": "https://www.youtube.com/",
         "X-YouTube-Identity": Math.random().toString(36).substring(2, 12),
@@ -301,13 +305,19 @@ export async function GET(request: NextRequest) {
 
         try {
             const h = GET_PULSAR_HEADERS(force, incomingUA);
+            // Phase 18: Robust Body Cloning for InnerTube/Mirror relays
+            let body = undefined;
+            const isPost = targetUrl.includes("youtubei") || targetUrl.includes("api/json");
+            if (isPost) {
+                body = await request.clone().text();
+            }
+
             const proxyRes = await fetch(targetUrl, {
-                method: targetUrl.includes("youtubei") ? "POST" : "GET",
+                method: isPost ? "POST" : "GET",
                 headers: h as any,
-                body: targetUrl.includes("youtubei") ? request.body : undefined,
+                body,
                 signal: AbortSignal.timeout(15000),
-                // @node-fetch doesn't support duplex, but Next.js fetch does for POST bodies
-                duplex: targetUrl.includes("youtubei") ? 'half' : undefined
+                duplex: body ? 'half' : undefined
             } as any);
 
             const data = await proxyRes.text();
