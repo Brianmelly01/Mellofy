@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
+  --background: #080808;
   --foreground: #ffffff;
+  --accent-purple: #a855f7;
+  --accent-pink: #ec4899;
+  --card-bg: #121212;
+  --pulsar-gradient: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
 }
 
 html,
@@ -16,11 +20,40 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
   overflow: hidden;
+  user-select: none;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-pink: var(--accent-pink);
+  --color-card: var(--card-bg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+.pulsar-bg {
+  background: var(--pulsar-gradient);
+}
+
+.pulsar-text {
+  background: var(--pulsar-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

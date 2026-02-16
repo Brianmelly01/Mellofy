@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, User } from "lucide-react";
+import { Settings, Zap, Bell, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/useAuthStore";
 import { motion } from "framer-motion";
@@ -15,67 +15,40 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
     const router = useRouter();
     const { onOpen, user, setUser } = useAuthStore();
 
-    const handleLogout = () => {
-        setUser(null);
-        router.push("/");
-    };
-
     return (
-        <div className={cn("h-fit bg-gradient-to-b from-emerald-800 p-6", className)}>
-            <div className="w-full mb-4 flex items-center justify-between">
-                <div className="hidden md:flex gap-x-2 items-center">
-                    <button
-                        onClick={() => router.back()}
-                        className="rounded-full bg-black flex items-center justify-center hover:opacity-75 transition"
-                    >
-                        <ChevronLeft size={35} className="text-white" />
-                    </button>
-                    <button
-                        onClick={() => router.forward()}
-                        className="rounded-full bg-black flex items-center justify-center hover:opacity-75 transition"
-                    >
-                        <ChevronRight size={35} className="text-white" />
-                    </button>
+        <div className={cn("sticky top-0 z-40 w-full h-20 bg-background/50 backdrop-blur-xl px-4 md:px-8", className)}>
+            <div className="h-full flex items-center justify-between w-full">
+                {/* Left: Settings */}
+                <motion.button
+                    whileTap={{ rotate: 90 }}
+                    onClick={() => router.push("/settings")}
+                    className="p-2 rounded-full hover:bg-white/5 transition"
+                >
+                    <Settings className="text-neutral-400 hover:text-white" size={24} />
+                </motion.button>
+
+                {/* Center: Logo */}
+                <div
+                    onClick={() => router.push("/")}
+                    className="flex items-center gap-x-2 cursor-pointer"
+                >
+                    <div className="w-8 h-8 pulsar-bg rounded-lg flex items-center justify-center p-1.5">
+                        <Zap className="text-white fill-white" />
+                    </div>
+                    <span className="text-2xl font-black text-white tracking-tighter">Mellofy</span>
                 </div>
-                <div className="flex md:hidden gap-x-2 items-center">
-                    {/* Mobile header icons could go here */}
-                </div>
-                <div className="flex justify-between items-center gap-x-4">
-                    {user ? (
-                        <div className="flex items-center gap-x-4">
-                            <button
-                                onClick={handleLogout}
-                                className="bg-white px-6 py-2 rounded-full font-bold hover:opacity-75 transition text-black"
-                            >
-                                Logout
-                            </button>
-                            <button
-                                onClick={() => router.push("/account")}
-                                className="bg-white rounded-full p-2 hover:opacity-75 transition"
-                            >
-                                <User className="text-black" />
-                            </button>
+
+                {/* Right: Actions */}
+                <div className="flex items-center gap-x-1 md:gap-x-4">
+                    <button className="p-2 rounded-full hover:bg-white/5 transition hidden sm:flex">
+                        <Search className="text-neutral-400 hover:text-white" size={22} />
+                    </button>
+                    <div className="relative p-2 rounded-full hover:bg-white/5 transition cursor-pointer">
+                        <Bell className="text-neutral-400 hover:text-white" size={22} />
+                        <div className="absolute top-1 right-1 w-4 h-4 bg-accent-pink rounded-full border-2 border-background flex items-center justify-center">
+                            <span className="text-[10px] font-bold text-white">3</span>
                         </div>
-                    ) : (
-                        <>
-                            <div>
-                                <button
-                                    onClick={() => onOpen("signup")}
-                                    className="bg-transparent text-neutral-300 font-medium hover:opacity-75 transition"
-                                >
-                                    Sign up
-                                </button>
-                            </div>
-                            <div>
-                                <button
-                                    onClick={() => onOpen("login")}
-                                    className="bg-white px-6 py-2 rounded-full font-bold hover:opacity-75 transition text-black"
-                                >
-                                    Log in
-                                </button>
-                            </div>
-                        </>
-                    )}
+                    </div>
                 </div>
             </div>
             {children}

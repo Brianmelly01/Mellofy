@@ -1,70 +1,45 @@
 "use client";
 
 import Header from "@/components/Header";
-import { Play } from "lucide-react";
-import { usePlayerStore } from "@/lib/store/usePlayerStore";
+import Hero from "@/components/Hero";
+import HorizontalSection from "@/components/HorizontalSection";
 
 export default function Home() {
-  const { setTrack } = usePlayerStore();
+  // Mock data for Phase 20 UI
+  const trendingTracks = [
+    { id: "1", title: "Starboy", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/34Na4j8AVgA/maxresdefault.jpg" },
+    { id: "2", title: "Blinding Lights", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/fHI8X4OXn-g/maxresdefault.jpg" },
+    { id: "3", title: "Save Your Tears", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/XXYlFuWEuKI/maxresdefault.jpg" },
+    { id: "4", title: "The Hills", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/yzTuBuLH9M8/maxresdefault.jpg" },
+    { id: "5", title: "Can't Feel My Face", artist: "The Weeknd", thumbnail: "https://i.ytimg.com/vi/KEI4qSrkPAs/maxresdefault.jpg" },
+  ];
 
-  const handlePlay = (i: number) => {
-    setTrack({
-      id: `featured-${i}`,
-      title: `Song Name ${i}`,
-      artist: `Artist Name`,
-      thumbnail: `https://picsum.photos/seed/${i + 40}/200`,
-      url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    });
-  };
+  const topPlaylists = [
+    { id: "p1", title: "Pulsar Beats", artist: "Curated by Mellofy", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=3540&auto=format&fit=crop" },
+    { id: "p2", title: "Synthwave Dreams", artist: "Neon Nights", thumbnail: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?q=80&w=3548&auto=format&fit=crop" },
+    { id: "p3", title: "Cyberpunk 2077", artist: "Night City Radio", thumbnail: "https://images.unsplash.com/photo-1605648916319-cf082f7524a1?q=80&w=3540&auto=format&fit=crop" },
+    { id: "p4", title: "Phonk Night", artist: "Drift Nation", thumbnail: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?q=80&w=3540&auto=format&fit=crop" },
+  ];
 
   return (
-    <div className="bg-neutral-900 rounded-lg h-full w-full overflow-hidden overflow-y-auto">
-      <Header>
-        <div className="mb-2">
-          <h1 className="text-white text-3xl font-semibold">Welcome back</h1>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4">
-            {/* Quick Link Card */}
-            <div
-              onClick={() => handlePlay(0)}
-              className="relative group flex items-center rounded-md overflow-hidden gap-x-4 bg-neutral-100/10 hover:bg-neutral-100/20 transition pr-4 cursor-pointer"
-            >
-              <div className="relative min-h-[64px] min-w-[64px]">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-700 to-blue-300 flex items-center justify-center">
-                  <Play className="text-black fill-black" size={32} />
-                </div>
-              </div>
-              <p className="font-medium truncate py-5">Liked Songs</p>
-              <div className="absolute transition opacity-0 rounded-full flex items-center justify-center bg-green-500 p-4 drop-shadow-md right-5 group-hover:opacity-100 hover:scale-110">
-                <Play className="text-black fill-black" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </Header>
-
-      <div className="mt-2 mb-7 px-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-white text-2xl font-semibold">Newest songs</h1>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-8 gap-4 mt-4">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div
-              key={i}
-              onClick={() => handlePlay(i)}
-              className="relative group bg-neutral-400/5 cursor-pointer hover:bg-neutral-400/10 transition p-3 rounded-md"
-            >
-              <div className="relative aspect-square w-full h-full rounded-md overflow-hidden">
-                <img className="object-cover w-full h-full" src={`https://picsum.photos/seed/${i + 40}/200`} alt="Song cover" />
-                <div className="absolute bottom-2 right-2 transition opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 flex items-center justify-center bg-green-500 p-3 rounded-full drop-shadow-md hover:scale-105">
-                  <Play className="text-black fill-black" size={20} />
-                </div>
-              </div>
-              <div className="flex flex-col items-start w-full pt-4 gap-y-1">
-                <p className="font-semibold truncate w-full">Song Name {i}</p>
-                <p className="text-neutral-400 text-sm pb-4 w-full truncate">Artist Name</p>
-              </div>
-            </div>
-          ))}
+    <div className="bg-background rounded-lg h-full w-full overflow-hidden overflow-y-auto no-scrollbar">
+      <Header />
+      <div className="px-4 md:px-8 pb-32">
+        <Hero />
+        <div className="mt-8 space-y-10">
+          <HorizontalSection
+            title="Trending Now"
+            items={trendingTracks}
+          />
+          <HorizontalSection
+            title="Your Playlists"
+            items={topPlaylists}
+            isSquare
+          />
+          <HorizontalSection
+            title="Recently Played"
+            items={trendingTracks.slice().reverse()}
+          />
         </div>
       </div>
     </div>

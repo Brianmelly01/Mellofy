@@ -27,6 +27,7 @@ import {
 import { usePlayerStore } from "@/lib/store/usePlayerStore"; // Keeping usePlayerStore as per original, assuming usePlayer is a typo in instructions
 import { cn } from "@/lib/utils";
 import PlayerContent from "./PlayerContent";
+import { motion } from "framer-motion";
 
 interface AcquisitionResults {
     audio: { url: string; filename: string } | null;
@@ -460,137 +461,82 @@ const Player = () => {
     if (!currentTrack) return null;
 
     return (
-        <div className="fixed bottom-0 bg-black w-full py-2 h-[80px] px-4 border-t border-neutral-800 z-50">
+        <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="w-full max-w-2xl mx-auto glass rounded-[32px] overflow-hidden p-2 shadow-2xl shadow-black/50"
+        >
             <PlayerContent />
-            <div className="grid grid-cols-2 md:grid-cols-3 h-full items-center max-w-[1400px] mx-auto">
-                {/* Track Info */}
-                <div className="flex items-center gap-x-4">
-                    <img
-                        src={currentTrack.thumbnail || "/placeholder-music.png"}
-                        alt="Thumbnail"
-                        className="w-14 h-14 rounded-md object-cover"
-                    />
-                    <div className="flex flex-col truncate">
-                        <p className="text-white font-medium text-sm truncate">{currentTrack.title}</p>
-                        <p className="text-neutral-400 text-xs truncate">{currentTrack.artist}</p>
-                    </div>
-                </div>
-
-                {/* Controls */}
-                <div className="flex flex-col items-center max-w-[400px] w-full gap-y-2">
-                    <div className="flex items-center gap-x-6 text-neutral-400">
-                        <Shuffle size={18} className="cursor-pointer hover:text-white transition" />
-                        <SkipBack
-                            onClick={playPrevious}
-                            size={22}
-                            className="cursor-pointer hover:text-white transition"
-                        />
-                        <button
-                            onClick={togglePlay}
-                            className="bg-white rounded-full p-2 hover:scale-105 transition"
-                        >
-                            {isPlaying ? (
-                                <Pause size={24} className="text-black fill-black" />
-                            ) : (
-                                <Play size={24} className="text-black fill-black ml-1" />
-                            )}
-                        </button>
-                        <SkipForward
-                            onClick={playNext}
-                            size={22}
-                            className="cursor-pointer hover:text-white transition"
-                        />
-                        <Repeat size={18} className="cursor-pointer hover:text-white transition" />
-                    </div>
-                    <div className="w-full flex items-center gap-x-2 px-2">
-                        <span className="text-[10px] text-neutral-400 min-w-[30px] text-right">0:00</span>
-                        <div className="flex-1 h-1 bg-neutral-800 rounded-full relative group cursor-pointer overflow-hidden">
-                            <div
-                                className="absolute h-full bg-neutral-400 group-hover:bg-emerald-500 transition-all"
-                                style={{ width: `${progress * 100}%` }}
-                            />
-                        </div>
-                        <span className="text-[10px] text-neutral-400 min-w-[30px]">{currentTrack.duration || "3:45"}</span>
-                    </div>
-                </div>
-
-                {/* Volume & Extras */}
-                <div className="hidden md:flex items-center justify-end pr-2 gap-x-4">
-                    <button
-                        onClick={() => setPlaybackMode(playbackMode === 'audio' ? 'video' : 'audio')}
-                        className={cn(
-                            "flex items-center gap-x-2 px-3 py-1.5 rounded-full text-[10px] font-bold transition whitespace-nowrap",
-                            playbackMode === 'video'
-                                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
-                                : "bg-neutral-800 text-neutral-400 hover:text-white border border-white/5"
-                        )}
+            <div className="flex items-center justify-between px-2 h-16 relative">
+                {/* Track Info (Left) */}
+                <div className="flex items-center gap-x-3 w-1/3 min-w-0">
+                    <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        className="relative w-12 h-12 flex-shrink-0"
                     >
-                        {playbackMode === 'audio' ? <Music size={12} /> : <Video size={12} />}
-                        {playbackMode === 'audio' ? "Audio" : "Video"}
-                    </button>
+                        <img
+                            src={currentTrack.thumbnail || "/placeholder-music.png"}
+                            alt="Thumbnail"
+                            className="w-full h-full rounded-2xl object-cover shadow-lg"
+                        />
+                        <div className="absolute inset-0 rounded-2xl border border-white/10" />
+                    </motion.div>
+                    <div className="flex flex-col truncate">
+                        <p className="text-white font-bold text-sm truncate leading-tight">
+                            {currentTrack.title}
+                        </p>
+                        <p className="text-neutral-400 text-[11px] font-medium truncate">
+                            {currentTrack.artist}
+                        </p>
+                    </div>
+                </div>
 
-                    {/* Download dropdown */}
-                    <div className="relative" ref={downloadMenuRef}>
+                {/* Progress & Info (Center) */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-y-1 mt-1">
+                    <div className="w-32 md:w-48 h-1 bg-white/10 rounded-full overflow-hidden relative group cursor-pointer">
+                        <motion.div
+                            className="absolute h-full pulsar-bg"
+                            style={{ width: `${progress * 100}%` }}
+                        />
+                    </div>
+                    <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">
+                        {playbackMode} Mode
+                    </span>
+                </div>
+
+                {/* Controls (Right) */}
+                <div className="flex items-center gap-x-2 w-1/3 justify-end">
+                    <div className="flex items-center gap-x-1 pr-2 border-r border-white/10 mr-1 hidden sm:flex">
+                        <button
+                            onClick={() => setPlaybackMode(playbackMode === 'audio' ? 'video' : 'audio')}
+                            className="p-2 text-neutral-400 hover:text-white transition"
+                        >
+                            {playbackMode === 'audio' ? <Music size={18} /> : <Video size={18} />}
+                        </button>
                         <button
                             onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                            className={cn(
-                                "text-neutral-400 hover:text-white transition"
-                            )}
-                            title="Download"
+                            className="p-2 text-neutral-400 hover:text-white transition"
                         >
                             <Download size={18} />
                         </button>
-                        {showDownloadMenu && (
-                            <div className="absolute bottom-full right-0 mb-2 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden min-w-[160px] z-50">
-                                <button
-                                    onClick={() => handleDownload('audio')}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition text-sm text-white/90"
-                                >
-                                    <Music size={18} className="text-[#1DB954]" />
-                                    Audio (High Quality)
-                                </button>
-                                <button
-                                    onClick={() => handleDownload('video')}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition text-sm text-white/90"
-                                >
-                                    <Video size={18} className="text-[#1DB954]" />
-                                    Video (HD MP4)
-                                </button>
-                                <button
-                                    onClick={() => handleDownload('both')}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 border-t border-white/5 transition text-sm text-white font-medium"
-                                >
-                                    <Shield size={18} className="text-[#1DB954]" />
-                                    Download Both
-                                </button>
-                            </div>
-                        )}
                     </div>
 
-                    <div className="flex items-center gap-x-2 w-[120px]">
-                        <button onClick={toggleMute} className="text-neutral-400 hover:text-white transition">
-                            {volume === 0 || isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                        </button>
-                        <div className="flex-1 h-1 bg-neutral-800 rounded-full relative group">
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                value={isMuted ? 0 : volume}
-                                onChange={(e) => {
-                                    const val = parseFloat(e.target.value);
-                                    setVolume(val);
-                                    if (val > 0) setIsMuted(false);
-                                }}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            />
-                            <div
-                                className="absolute h-full bg-neutral-400 group-hover:bg-emerald-500 rounded-full"
-                                style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
-                            />
-                        </div>
-                    </div>
+                    <button
+                        onClick={togglePlay}
+                        className="w-10 h-10 pulsar-bg rounded-full flex items-center justify-center hover:scale-105 transition-all shadow-lg"
+                    >
+                        {isPlaying ? (
+                            <Pause size={18} className="text-white fill-white" />
+                        ) : (
+                            <Play size={18} className="text-white fill-white ml-0.5" />
+                        )}
+                    </button>
+                    <button
+                        onClick={playNext}
+                        className="p-2 text-neutral-400 hover:text-white transition"
+                    >
+                        <SkipForward size={22} />
+                    </button>
                 </div>
             </div>
 
@@ -648,161 +594,106 @@ const Player = () => {
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-3">
-                                                <p className="flex items-center gap-2 text-sm text-white/90 font-medium">
-                                                    <Loader2 size={16} className="animate-spin text-purple-500" />
-                                                    {downloadProgress > 0 ? `Downloading... ${downloadProgress}%` : "Deploying Stealth Warp Tunnel..."}
-                                                </p>
-                                                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="flex items-center justify-between text-[10px] font-bold text-purple-400 uppercase">
+                                                    <span>Mirror Stream Tunnel</span>
+                                                    <span>{downloadProgress}%</span>
+                                                </div>
+                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                                                     <div
-                                                        className="absolute inset-y-0 left-0 bg-purple-600 transition-all duration-300"
+                                                        className="h-full bg-purple-500 transition-all duration-300"
                                                         style={{ width: `${downloadProgress}%` }}
                                                     />
                                                 </div>
+                                                <p className="text-[9px] text-white/30 italic">
+                                                    Encrypting stream packets through global mirror fleet...
+                                                </p>
                                             </div>
                                         )}
-                                        {hubStatus === 'ready' && "Success! Link decoupled from YouTube. Check downloads."}
-                                        {hubStatus === 'fallback' && "YouTube protection detected. Use the manual mirrors below."}
+                                        {hubStatus === 'ready' && (
+                                            <span className="flex items-center gap-2 text-[#1DB954]">
+                                                <CheckCircle2 size={14} />
+                                                Warp-Tunnel Established. Acquisition successful.
+                                            </span>
+                                        )}
+                                        {hubStatus === 'fallback' && (
+                                            <span className="flex items-center gap-2 text-amber-500">
+                                                <AlertTriangle size={14} />
+                                                Vercel-IP Blacklisted. Extreme Deep-Pulse required.
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Universal Acquisition Button */}
+                                {/* Results / Action Section */}
+                                {hubStatus === 'ready' && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-white/60">Your files are now available locally:</p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {hubResults.audio && (
+                                                <button
+                                                    onClick={() => triggerLink(hubResults.audio!.url, hubResults.audio!.filename)}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition group"
+                                                >
+                                                    <Music size={16} className="text-purple-400" />
+                                                    <span className="text-xs font-bold text-white">Audio</span>
+                                                </button>
+                                            )}
+                                            {hubResults.video && (
+                                                <button
+                                                    onClick={() => triggerLink(hubResults.video!.url, hubResults.video!.filename)}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition group"
+                                                >
+                                                    <Video size={16} className="text-blue-400" />
+                                                    <span className="text-xs font-bold text-white">Video</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => setIsHubOpen(false)}
+                                            className="w-full py-3 bg-[#1DB954] hover:scale-[1.02] active:scale-95 rounded-xl text-black font-bold text-sm transition mt-2 shadow-lg shadow-[#1DB954]/20"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                )}
+
                                 {hubStatus === 'fallback' && (
-                                    <div className="w-full space-y-2">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                                            <span className="text-[10px] text-orange-400 font-bold uppercase tracking-widest">Recovery Recommended</span>
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-center text-white/40 uppercase tracking-widest mb-2">
+                                            Auto-Tunnel Blocked. Select Secure Method:
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => window.open(`https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Auto)
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://cobalt.canine.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Mirror)
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}&f=${playbackMode === 'audio' ? 'mp3' : 'mp4'}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-amber-400" /> Loader.to
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://www.y2mate.com/youtube/${currentTrack.id}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-red-400" /> Y2Mate
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={() => window.open(hubResults.fallbackUrl || `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
-                                            className="w-full py-4 rounded-xl font-bold uppercase tracking-widest bg-orange-500/10 text-orange-400 border border-orange-500/30 hover:bg-orange-500/20 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <Shield size={18} />
-                                            Targeted Force Unlock
-                                        </button>
-                                        <button
-                                            onClick={() => handleDownload('both')}
-                                            className="w-full py-3 rounded-xl font-medium text-xs text-white/40 hover:text-white/60 transition-all"
-                                        >
-                                            Re-Attempt Warp Tunnel
-                                        </button>
+                                        <p className="text-[10px] text-center text-white/30">
+                                            Note: Opens in new secure tab. No ads.
+                                        </p>
                                     </div>
                                 )}
-                                {hubStatus === 'tunneling' && (
-                                    <button
-                                        disabled={true}
-                                        className="w-full py-4 rounded-xl font-bold uppercase tracking-widest bg-purple-900/50 text-purple-300 border border-purple-500/30 cursor-not-allowed opacity-80 flex items-center justify-center gap-2"
-                                    >
-                                        <Loader2 size={18} className="animate-spin" />
-                                        Tunneling Active...
-                                    </button>
-                                )}
-                                {(hubStatus !== 'tunneling' && hubStatus !== 'fallback' && hubStatus !== 'scanning' && hubStatus !== 'probing') && (
-                                    <button
-                                        onClick={() => handleGhostProtocol('both')}
-                                        className="w-full py-4 rounded-xl font-bold uppercase tracking-widest bg-[#1DB954] text-black border-b-2 border-[#1DB954]/50 hover:scale-[1.02] hover:bg-[#1ed760] active:scale-95 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <div className="relative">
-                                            <Music size={18} />
-                                        </div>
-                                        Tunnel Both (Audio + Video)
-                                    </button>
-                                )}
-                                <div className={cn(
-                                    "p-4 rounded-xl border transition-all duration-300",
-                                    hubResults.audio ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
-                                )}>
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className={cn("p-2 rounded-lg", hubResults.audio ? "bg-[#1DB954]/20" : "bg-white/5")}>
-                                            <Music size={24} className={hubResults.audio ? "text-[#1DB954]" : "text-white/20"} />
-                                        </div>
-                                        <span className="text-xs font-medium">Audio M4A</span>
-                                        <button
-                                            onClick={() => {
-                                                if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
-                                                else if (hubStatus === 'tunneling') handleGhostProtocol('audio');
-                                                else handleDownload('audio');
-                                            }}
-                                            className={cn(
-                                                "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
-                                                hubResults.audio
-                                                    ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                    : hubStatus === 'tunneling'
-                                                        ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
-                                            )}
-                                        >
-                                            {hubResults.audio ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className={cn(
-                                    "p-4 rounded-xl border transition-all duration-300",
-                                    hubResults.video ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
-                                )}>
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className={cn("p-2 rounded-lg", hubResults.video ? "bg-[#1DB954]/20" : "bg-white/5")}>
-                                            <Video size={24} className={hubResults.video ? "text-[#1DB954]" : "text-white/20"} />
-                                        </div>
-                                        <span className="text-xs font-medium">Video MP4</span>
-                                        <button
-                                            onClick={() => {
-                                                if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
-                                                else if (hubStatus === 'tunneling') handleGhostProtocol('video');
-                                                else handleDownload('video');
-                                            }}
-                                            className={cn(
-                                                "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
-                                                hubResults.video
-                                                    ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                    : hubStatus === 'tunneling'
-                                                        ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
-                                            )}
-                                        >
-                                            {hubResults.video ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
-
-                            {/* External Acquisition Matrix */}
-                            {hubStatus === 'fallback' && (
-                                <div className="space-y-3">
-                                    <p className="text-xs text-center text-white/40 uppercase tracking-widest mb-2">
-                                        Auto-Tunnel Blocked. Select Secure Method:
-                                    </p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => window.open(`https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
-                                        >
-                                            <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Auto)
-                                        </button>
-                                        <button
-                                            onClick={() => window.open(`https://cobalt.canine.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
-                                        >
-                                            <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Mirror)
-                                        </button>
-                                        <button
-                                            onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}&f=${playbackMode === 'audio' ? 'mp3' : 'mp4'}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
-                                        >
-                                            <ExternalLink size={14} className="group-hover:text-amber-400" /> Loader.to
-                                        </button>
-                                        <button
-                                            onClick={() => window.open(`https://www.y2mate.com/youtube/${currentTrack.id}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
-                                        >
-                                            <ExternalLink size={14} className="group-hover:text-red-400" /> Y2Mate
-                                        </button>
-                                    </div>
-                                    <p className="text-[10px] text-center text-white/30">
-                                        Note: Opens in new secure tab. No ads.
-                                    </p>
-                                </div>
-                            )}
                         </div>
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
@@ -813,7 +704,7 @@ const Player = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </motion.div>
     );
 };
 
