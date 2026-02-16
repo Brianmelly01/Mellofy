@@ -41,20 +41,26 @@ const COBALT_INSTANCES = [
 ];
 
 const PROXY_INSTANCES = [
-    // Invidious Fleet
+    // Invidious Fleet (The Giants)
     "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
     "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
     "https://invidious.lunar.icu", "https://iv.nautile.io", "https://invidious.einfach.org", "https://yt.artemislena.eu",
     "https://inv.riverside.rocks", "https://invidious.sethforprivacy.com", "https://invidious.tiekoetter.com",
     "https://iv.cyberspace.moe", "https://invidious.no-logs.com", "https://inv.us.projectsegfau.lt", "https://invidious.fdn.fr",
     "https://inv.cat.net", "https://invidious.drgns.space", "https://inv.pistasjis.net", "https://invidious.jing.rocks",
-    // Piped Fleet (Discovery Heavyweights)
+    "https://iv.libRedirect.eu", "https://invidious.privacydev.net", "https://iv.melmac.space", "https://invidious.pablouser.io",
+    "https://invidious.snopyta.org", "https://invidious.kavin.rocks", "https://iv.okayme.com", "https://yt.oops.social",
+    "https://invidious.baczek.me", "https://invidious.protokolla.fi", "https://inv.skidder.xyz", "https://invidious.io.lol",
+    // Piped Fleet (The Discovery Spears)
     "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
     "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
     "https://pipedapi.moom.work", "https://pipedapi.systilly.xyz", "https://pipedapi.nosebs.rocks",
-    "https://api.piped.privacy.com.de", "https://pipedapi.palash.dev", "https://pipedapi.kavin.rocks",
-    "https://piped-api.garudalinux.org", "https://api-piped.mha.fi"
+    "https://api.piped.privacy.com.de", "https://pipedapi.palash.dev", "https://pipedapi.garudalinux.org",
+    "https://api-piped.mha.fi", "https://piped-api.us.projectsegfau.lt", "https://pipedapi.drgns.space",
+    "https://pipedapi.rinu.xyz", "https://api.piped.yt", "https://pipedapi.astartes.rocks",
+    "https://piped-api.ext.moe", "https://pipedapi.ducks.it", "https://pipedapi.xyz", "https://pipedapi.no",
+    "https://pipedapi.it", "https://piped-api.kavin.rocks", "https://pipedapi.privacy.dev"
 ];
 
 const STABLE_FALLBACKS = [
@@ -73,11 +79,11 @@ const HUMAN_POTOKENS = [
 ];
 
 // V23 Pulsar-Core Headers (Active Playback Simulation)
-const GET_PULSAR_HEADERS = (force: boolean = false) => {
+const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
     const isMobile = force;
-    const agents = isMobile
-        ? ["com.google.android.youtube/19.05.35 (Linux; U; Android 14; en_US; Pixel 8 Pro; Build/UQ1A.240205.004)"]
-        : ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"];
+    let userAgent = incomingUA || (isMobile
+        ? "com.google.android.youtube/19.05.35 (Linux; U; Android 14; en_US; Pixel 8 Pro; Build/UQ1A.240205.004)"
+        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36");
 
     // Rotate tokens from the verified human signal list
     const token = force ? HUMAN_POTOKENS[Math.floor(Math.random() * HUMAN_POTOKENS.length)] : "M" + Math.random().toString(36).substring(2, 40);
@@ -85,14 +91,13 @@ const GET_PULSAR_HEADERS = (force: boolean = false) => {
     return {
         "Content-Type": "application/json",
         "Accept": "*/*",
-        "User-Agent": agents[0],
+        "User-Agent": userAgent,
         "X-YouTube-Client-Name": isMobile ? "21" : "1",
         "X-YouTube-Client-Version": isMobile ? "2.20240224.0.0" : "2.20240224.01.00",
         "X-Goog-Visitor-Id": Math.random().toString(36).substring(2, 12),
         "X-YouTube-Po-Token": token,
         "Origin": "https://www.youtube.com",
         "Referer": "https://www.youtube.com/",
-        // Pulsar: Handshake parameters for active session simulation
         "X-YouTube-Identity": Math.random().toString(36).substring(2, 12),
         "X-Playback-Session-Id": Math.random().toString(36).substring(2, 20),
     };
@@ -123,9 +128,9 @@ async function verifyUrl(url: string, force: boolean = false): Promise<boolean> 
     }
 }
 
-async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string; quality?: string } | null> {
+async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string; quality?: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const headers = GET_PULSAR_HEADERS(force);
+    const headers = GET_PULSAR_HEADERS(force, incomingUA);
 
     const base = instance.replace(/\/$/, "");
     const endpoint = base.includes("api") ? base : `${base}/api/json`;
@@ -181,10 +186,13 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
     return null;
 }
 
-async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
+async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string } | null> {
     const fetchWithProxy = async (url: string) => {
         try {
-            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            const res = await fetch(url, {
+                headers: GET_PULSAR_HEADERS(force, incomingUA) as any,
+                signal: AbortSignal.timeout(10000)
+            });
             if (res.ok) return await res.json();
 
             // Phase 7: Infinity Bridge Proxy Fallback
@@ -192,7 +200,10 @@ async function tryPiped(instance: string, videoId: string, type: string, force: 
             for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
                 try {
                     const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
-                    const pRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+                    const pRes = await fetch(proxyUrl, {
+                        headers: GET_PULSAR_HEADERS(force, incomingUA) as any,
+                        signal: AbortSignal.timeout(12000)
+                    });
                     if (pRes.ok) {
                         const text = await pRes.text();
                         const data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
@@ -222,17 +233,18 @@ async function tryPiped(instance: string, videoId: string, type: string, force: 
     } catch (e) { return null; }
 }
 
-async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
+async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string } | null> {
+    const headers = GET_PULSAR_HEADERS(force, incomingUA);
     const fetchWithProxy = async (url: string) => {
         try {
-            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            const res = await fetch(url, { headers: headers as any, signal: AbortSignal.timeout(8000) });
             if (res.ok) return await res.json();
 
             console.log(`Invidious [403/Fail]: Engaging Infinity Proxy for ${instance}...`);
             for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
                 try {
                     const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
-                    const pRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+                    const pRes = await fetch(proxyUrl, { headers: headers as any, signal: AbortSignal.timeout(10000) });
                     if (pRes.ok) {
                         const text = await pRes.text();
                         const data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
@@ -272,6 +284,8 @@ export async function GET(request: NextRequest) {
 
     if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
+    const incomingUA = request.headers.get("X-Pulsar-Agent") || undefined;
+
     // V26 OMNI-TUNNEL PRIME: Forced Handshake & Zero-Signature Tunnel
     if (pipe) {
         try {
@@ -281,8 +295,8 @@ export async function GET(request: NextRequest) {
             if (directUrl) {
                 console.log("Pulsar: Direct URL proxy mode");
                 const streamResponse = await fetch(directUrl, {
-                    headers: { ...GET_PULSAR_HEADERS(true), "Range": "bytes=0-", "Connection": "keep-alive" },
-                    signal: AbortSignal.timeout(15000)
+                    headers: { ...GET_PULSAR_HEADERS(true, incomingUA), "Range": "bytes=0-", "Connection": "keep-alive" },
+                    signal: AbortSignal.timeout(30000)
                 });
                 if (streamResponse.ok) {
                     const headers = new Headers();
@@ -310,9 +324,9 @@ export async function GET(request: NextRequest) {
                     const batch = fullFleet.slice(i, i + batchSize);
                     const results = await Promise.all(batch.map(instance => {
                         const t = type === "audio" ? "audio" : "video";
-                        if (instance.includes("cobalt")) return tryCobalt(instance, videoId, t, true);
-                        if (instance.includes("piped")) return tryPiped(instance, videoId, t, true);
-                        return tryInvidious(instance, videoId, t, true);
+                        if (instance.includes("cobalt")) return tryCobalt(instance, videoId, t, true, incomingUA);
+                        if (instance.includes("piped")) return tryPiped(instance, videoId, t, true, incomingUA);
+                        return tryInvidious(instance, videoId, t, true, incomingUA);
                     }));
                     const found = results.find(res => res !== null);
                     if (found) { result = found; break; }
@@ -323,8 +337,8 @@ export async function GET(request: NextRequest) {
             if (result?.url) {
                 try {
                     const streamResponse = await fetch(result.url, {
-                        headers: { ...GET_PULSAR_HEADERS(true), "Range": "bytes=0-", "Connection": "keep-alive" },
-                        signal: AbortSignal.timeout(10000)
+                        headers: { ...GET_PULSAR_HEADERS(true, incomingUA), "Range": "bytes=0-", "Connection": "keep-alive" },
+                        signal: AbortSignal.timeout(30000)
                     });
                     if (streamResponse.ok) {
                         const headers = new Headers();

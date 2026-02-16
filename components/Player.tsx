@@ -169,21 +169,16 @@ const Player = () => {
     ];
 
     const INVIDIOUS_NODES = [
-        "https://vid.puffyan.us",
-        "https://invidious.flokinet.to",
-        "https://inv.vern.cc",
-        "https://iv.ggtyler.dev",
-        "https://invidious.projectsegfau.lt"
+        "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
+        "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
+        "https://invidious.lunar.icu", "https://iv.nautile.io", "https://iv.libRedirect.eu", "https://invidious.privacydev.net",
+        "https://iv.melmac.space", "https://invidious.snopyta.org", "https://invidious.kavin.rocks", "https://iv.okayme.com"
     ];
 
     const COBALT_NODES = [
-        "https://cobalt.tools",
-        "https://co.wuk.sh",
-        "https://cobalt.api.unblocker.it",
-        "https://cobalt.q69.it",
-        "https://api.cobalt.tools",
-        "https://cobalt-api.v06.me",
-        "https://cobalt.sweet-pota.to"
+        "https://cobalt.tools", "https://co.wuk.sh", "https://cobalt.api.unblocker.it", "https://cobalt.q69.it",
+        "https://api.cobalt.tools", "https://cobalt-api.v06.me", "https://cobalt.sweet-pota.to", "https://cobaltt.tools",
+        "https://cobalt.canine.tools", "https://lc.vern.cc", "https://cobalt.meowing.de", "https://co.eepy.moe"
     ];
 
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
@@ -310,7 +305,13 @@ const Player = () => {
             if (directUrl) {
                 pipeUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
             }
-            const response = await fetch(pipeUrl);
+            const response = await fetch(pipeUrl, {
+                headers: {
+                    'X-Pulsar-Agent': navigator.userAgent,
+                    'X-Pulsar-Origin': window.location.origin,
+                    'isNoQuery': 'true' // Phase 13 force tunnel
+                }
+            });
             if (!response.ok) throw new Error(`Tunnel Failed for ${t} (HTTP ${response.status})`);
 
             const contentLength = response.headers.get('content-length');
