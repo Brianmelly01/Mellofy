@@ -115,30 +115,43 @@ const Player = () => {
         if (!currentTrack) return;
 
         setIsHubOpen(true);
-        setHubStatus('probing');
-        setExtractionLayer('ytdl');
+        setHubStatus('scanning');
         setHubResults({ audio: null, video: null, fallbackUrl: null });
         setShowDownloadMenu(false);
 
         try {
-            console.log("Hyper-Bridge: Deploying stealth warp discovery...");
-            setStatusMessage("Deploying Stealth Warp Tunnel: Intercepting Security...");
-            // Phase 10: 40s timeout for 400-node sweep
-            const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}&action=discovery`, { signal: AbortSignal.timeout(40000) });
-            const data = await response.json();
+            console.log("Omnipresence Phase 12: Engaging User-IP Spear discovery...");
+            setStatusMessage("Quantum Search Engaged (User-IP Spear)...");
 
-            if (data.status === 'found') {
-                console.log("Hyper-Bridge: Discovery successful. Handing over to Blind Tunnel...");
+            // 1. Client-Side Probe (Primary - Uses Browser IP)
+            const [audioUrl, videoUrl] = await Promise.all([
+                (type === 'audio' || type === 'both') ? clientSideProbe(currentTrack.id, 'audio') : Promise.resolve(null),
+                (type === 'video' || type === 'both') ? clientSideProbe(currentTrack.id, 'video') : Promise.resolve(null)
+            ]);
+
+            if (audioUrl || videoUrl) {
+                console.log("Omnipresence: Link found by browser! Triggering Warp Tunnel...");
                 handleGhostProtocol(type, {
-                    audioUrl: data.audio || null,
-                    videoUrl: data.video || null
+                    audioUrl: audioUrl || null,
+                    videoUrl: videoUrl || null
                 });
             } else {
-                console.log("Hyper-Bridge: Discovery exhausted. Triggering emergency blind tunnel...");
-                handleGhostProtocol(type);
+                // 2. Server-Side Fallback (Secondary - Uses Deep Shotgun)
+                console.log("Omnipresence: Browser IP exhausted. Falling back to Server Gun...");
+                const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}&action=discovery`, { signal: AbortSignal.timeout(30000) });
+                const data = await response.json();
+
+                if (data.status === 'found') {
+                    handleGhostProtocol(type, {
+                        audioUrl: data.audio || null,
+                        videoUrl: data.video || null
+                    });
+                } else {
+                    handleGhostProtocol(type);
+                }
             }
         } catch (err) {
-            console.error("Hyper-Bridge: Stealth discovery timed out, engaging Emergency Tunnel...", err);
+            console.error("Omnipresence: Discovery system failure, fallback to emergency tunnel.", err);
             handleGhostProtocol(type);
         }
     };
@@ -237,22 +250,6 @@ const Player = () => {
             return null;
         };
 
-        // V6 Strategy: Deep Pulse Discovery Bridge (Force Mode Extraction)
-        try {
-            console.log(`V6 Nuclear Pulse: Offloading high-intensity search for ${videoId} to server...`);
-            setStatusMessage("Nuclear Extraction Active: Bypassing Security Walls...");
-            const discoveryRes = await fetchWithTimeout(`/api/download?id=${videoId}&type=${type}&action=discovery`, {}, 25000); // Phase 8: 25s timeout
-            if (discoveryRes.ok) {
-                const data = await discoveryRes.json();
-                if (data.status === "found") {
-                    console.log("V6 Discovery: Nuclear pulse successful!");
-                    return type === 'audio' ? data.audio : data.video || data.audio; // Handle V6 response shape
-                }
-            }
-        } catch (e) {
-            console.warn("V6 Nuclear Bridge timeout, falling back to V4 Pulsar mirrors...", e);
-        }
-
         const probeCobalt = async (instance: string): Promise<string | null> => {
             try {
                 const res = await fetchWithTimeout(`${instance}/api/json`, {
@@ -263,8 +260,9 @@ const Player = () => {
                         downloadMode: type === 'audio' ? 'audio' : 'auto',
                         youtubeVideoCodec: 'h264'
                     })
-                }, 10000);
-                if (res.ok) {
+                }, 10000).catch(() => null);
+
+                if (res && res.ok) {
                     const d = await res.json();
                     return d.url || d.picker?.[0]?.url || null;
                 }

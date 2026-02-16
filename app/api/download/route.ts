@@ -102,9 +102,9 @@ async function verifyUrl(url: string, force: boolean = false): Promise<boolean> 
     // Phase 10: Hyper-Bridge Blind Extraction
     // YouTube detects HEAD requests from Vercel as bot signals. 
     // We now skip all pings for known video providers and trust them blindly.
-    const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt", "dl", "api"];
-    if (knownDomains.some(d => url.includes(d))) {
-        console.log(`Pulsar: Hyper-Bridge Blind Trust for ${url.substring(0, 40)}...`);
+    const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt", "dl", "api", "youtube"];
+    if (force || knownDomains.some(d => url.includes(d))) {
+        console.log(`Pulsar: Omnipresence Blind Trust for ${url.substring(0, 40)}...`);
         return true;
     }
 
