@@ -167,7 +167,11 @@ const Player = () => {
     const COBALT_PUBLIC_INSTANCES = [
         "https://cobalt.canine.tools",
         "https://lc.vern.cc",
-        "https://cobalt.tools"
+        "https://cobalt.tools",
+        "https://api.cobalt.tools",
+        "https://cobalt.mayo.sh",
+        "https://cobalt.meowing.de",
+        "https://cobalt.razor.sh"
     ];
 
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
@@ -186,7 +190,8 @@ const Player = () => {
                         youtubeVideoCodec: "h264",
                         audioFormat: "best",
                         filenamePattern: "basic"
-                    })
+                    }),
+                    signal: AbortSignal.timeout(5000)
                 });
 
                 if (!response.ok) continue;
