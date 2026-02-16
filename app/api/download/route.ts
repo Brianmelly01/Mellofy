@@ -277,7 +277,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
     const type = searchParams.get("type") || "both";
-    const discoveryMode = searchParams.get("action") === "discovery";
+    const action = searchParams.get("action");
+    const discoveryMode = action === "discovery";
     const force = searchParams.get("force") === "true" || discoveryMode; // Auto-Force for discovery
     const pipe = searchParams.get("pipe") === "true";
     const skipProbe = searchParams.get("skip_probe") === "true";
@@ -288,6 +289,32 @@ export async function GET(request: NextRequest) {
     const incomingUA = request.headers.get("X-Pulsar-Agent") || undefined;
 
     // V26 OMNI-TUNNEL PRIME: Forced Handshake & Zero-Signature Tunnel
+    // V24: Omega Source Discovery Relay
+    if (action === "proxy") {
+        const targetUrl = searchParams.get("url");
+        if (!targetUrl) return NextResponse.json({ error: "Missing Target URL" }, { status: 400 });
+
+        try {
+            const h = GET_PULSAR_HEADERS(force, incomingUA);
+            const proxyRes = await fetch(targetUrl, {
+                method: targetUrl.includes("youtubei") ? "POST" : "GET",
+                headers: h as any,
+                body: targetUrl.includes("youtubei") ? request.body : undefined,
+                signal: AbortSignal.timeout(15000),
+                // @node-fetch doesn't support duplex, but Next.js fetch does for POST bodies
+                duplex: targetUrl.includes("youtubei") ? 'half' : undefined
+            } as any);
+
+            const data = await proxyRes.text();
+            return new NextResponse(data, {
+                status: proxyRes.status,
+                headers: { "Content-Type": proxyRes.headers.get("Content-Type") || "application/json" }
+            });
+        } catch (e) {
+            return NextResponse.json({ error: "Relay Failed" }, { status: 500 });
+        }
+    }
+
     if (pipe) {
         try {
             console.log(`Pulsar-Core Bridging: ${videoId} (${type}) [SkipProbe: ${skipProbe}, DirectURL: ${!!directUrl}]`);

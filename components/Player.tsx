@@ -203,19 +203,15 @@ const Player = () => {
 
         const probePiped = async (instance: string): Promise<string | null> => {
             try {
-                let data = null;
-                try {
-                    const res = await fetchWithTimeout(`${instance}/streams/${videoId}`, { headers: { "Accept": "application/json" } });
-                    if (res.ok) data = await res.json();
-                } catch (e) { }
-
-                if (!data) data = await tryAllOrigins(`${instance}/streams/${videoId}`);
-
-                if (data && data.audioStreams && data.audioStreams.length > 0) {
-                    if (type === 'audio') return data.audioStreams[0].url;
-                    if (type === 'video' && data.videoStreams && data.videoStreams.length > 0) {
-                        return (data.videoStreams.find((s: any) => !s.videoOnly) || data.videoStreams[0]).url;
-                    }
+                // Phase 16: Relayed Discovery (CORS-Proof)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/streams/${videoId}`)}`;
+                const res = await fetchWithTimeout(bridgeUrl, { headers: { "Accept": "application/json" } }, 10000).catch(() => null);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
+                    if (!streams || streams.length === 0) return null;
+                    const stream = streams.find((s: any) => s.quality === "720p") || streams.find((s: any) => !s.videoOnly) || streams[0];
+                    return stream?.url || null;
                 }
             } catch (e) { }
             return null;
@@ -223,19 +219,16 @@ const Player = () => {
 
         const probeInvidious = async (instance: string): Promise<string | null> => {
             try {
-                let data = null;
-                try {
-                    const res = await fetchWithTimeout(`${instance}/api/v1/videos/${videoId}`, { headers: { "Accept": "application/json" } });
-                    if (res.ok) data = await res.json();
-                } catch (e) { }
-
-                if (!data) data = await tryAllOrigins(`${instance}/api/v1/videos/${videoId}`);
-
-                if (data && data.formatStreams) {
-                    const stream = data.formatStreams.find((s: any) =>
-                        type === 'audio' ? (s.audioQuality && s.container === 'm4a') : (s.resolution === '720p' && s.container === 'mp4')
-                    );
-                    if (stream) return stream.url;
+                // Phase 16: Relayed Discovery (CORS-Proof)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/v1/videos/${videoId}?local=true`)}`;
+                const res = await fetchWithTimeout(bridgeUrl, {}, 10000).catch(() => null);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    const formats = data.adaptiveFormats || data.formatStreams || [];
+                    const format = type === 'audio'
+                        ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
+                        : (formats.find((f: any) => f.qualityLabel?.includes("720") || f.resolution === '720p') || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
+                    return format?.url || null;
                 }
             } catch (e) { }
             return null;
@@ -243,14 +236,17 @@ const Player = () => {
 
         const probeCobalt = async (instance: string): Promise<string | null> => {
             try {
-                const res = await fetchWithTimeout(`${instance}/api/json`, {
+                // Phase 16: Relayed Discovery (CORS-Proof)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/json`)}`;
+                const payload = {
+                    url: `https://youtube.com/watch?v=${videoId}`,
+                    downloadMode: type === 'audio' ? 'audio' : 'auto',
+                    youtubeVideoCodec: 'h264'
+                };
+                const res = await fetchWithTimeout(bridgeUrl, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify({
-                        url: `https://youtube.com/watch?v=${videoId}`,
-                        downloadMode: type === 'audio' ? 'audio' : 'auto',
-                        youtubeVideoCodec: 'h264'
-                    })
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
                 }, 10000).catch(() => null);
 
                 if (res && res.ok) {
@@ -263,7 +259,8 @@ const Player = () => {
 
         const probeInnerTube = async (): Promise<string | null> => {
             try {
-                // Phase 15: Direct Source Spear (Android Client Mimicry)
+                // Phase 16: Relayed Source Spear (CORS+IP Proof)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`https://www.youtube.com/youtubei/v1/player`)}`;
                 const payload = {
                     videoId,
                     context: {
@@ -273,11 +270,11 @@ const Player = () => {
                         }
                     }
                 };
-                const res = await fetchWithTimeout(`https://www.youtube.com/youtubei/v1/player`, {
+                const res = await fetchWithTimeout(bridgeUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload)
-                }, 10000).catch(() => null);
+                }, 15000).catch(() => null);
 
                 if (res && res.ok) {
                     const data = await res.json();
