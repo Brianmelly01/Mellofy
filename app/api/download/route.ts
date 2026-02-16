@@ -34,36 +34,20 @@ const COBALT_INSTANCES = [
 ];
 
 const PROXY_INSTANCES = [
-    "https://invidious.ducks.party",
-    "https://inv.vern.cc",
-    "https://invidious.flokinet.to",
-    "https://pipedapi.kavin.rocks",
-    "https://piped-api.lunar.icu",
-    "https://piped-api.garudalinux.org",
-    "https://api-piped.mha.fi",
-    "https://invidious.nerdvpn.de",
-    "https://iv.datura.network",
-    "https://invidious.privacyredirect.com",
-    "https://iv.ggtyler.dev",
-    "https://invidious.projectsegfau.lt",
-    "https://iv.n0p.me",
-    "https://invidious.namazso.eu",
-    "https://api.piped.privacydev.net",
-    "https://inv.zzls.xyz",
-    "https://invidious.lunar.icu",
-    "https://iv.nautile.io",
-    "https://invidious.einfach.org",
-    "https://yt.artemislena.eu",
-    "https://pipedapi.recloud.me",
-    "https://pipedapi.leptons.xyz",
-    "https://inv.riverside.rocks",
-    "https://invidious.sethforprivacy.com",
-    "https://invidious.tiekoetter.com",
-    "https://iv.cyberspace.moe",
-    "https://invidious.no-logs.com",
-    "https://inv.us.projectsegfau.lt",
-    "https://invidious.fdn.fr",
-    "https://inv.cat.net",
+    // Invidious Fleet
+    "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
+    "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
+    "https://invidious.lunar.icu", "https://iv.nautile.io", "https://invidious.einfach.org", "https://yt.artemislena.eu",
+    "https://inv.riverside.rocks", "https://invidious.sethforprivacy.com", "https://invidious.tiekoetter.com",
+    "https://iv.cyberspace.moe", "https://invidious.no-logs.com", "https://inv.us.projectsegfau.lt", "https://invidious.fdn.fr",
+    "https://inv.cat.net", "https://invidious.drgns.space", "https://inv.pistasjis.net", "https://invidious.jing.rocks",
+    // Piped Fleet (Discovery Heavyweights)
+    "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
+    "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
+    "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
+    "https://pipedapi.moom.work", "https://pipedapi.systilly.xyz", "https://pipedapi.nosebs.rocks",
+    "https://api.piped.privacy.com.de", "https://pipedapi.palash.dev", "https://pipedapi.kavin.rocks",
+    "https://piped-api.garudalinux.org", "https://api-piped.mha.fi"
 ];
 
 const STABLE_FALLBACKS = [
@@ -220,7 +204,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
     const type = searchParams.get("type") || "both";
-    const force = searchParams.get("force") === "true";
+    const discoveryMode = searchParams.get("action") === "discovery";
+    const force = searchParams.get("force") === "true" || discoveryMode; // Auto-Force for discovery
     const pipe = searchParams.get("pipe") === "true";
     const skipProbe = searchParams.get("skip_probe") === "true";
     const directUrl = searchParams.get("direct_url");
@@ -367,23 +352,20 @@ export async function GET(request: NextRequest) {
         return result;
     };
 
-    // === PHASE 5: Quantum Discovery Bridge ===
-    if (searchParams.get("action") === "discovery") {
-        console.log(`Quantum Discovery: Finding links for ${videoId} (${type})...`);
-        if (type === "both") {
-            const [audio, video] = await Promise.all([probeType("audio"), probeType("video")]);
-            return NextResponse.json({
-                audio: audio?.url || null,
-                video: video?.url || null,
-                title: audio?.title || video?.title || "download",
-                status: (audio || video) ? "found" : "failed"
-            });
-        }
-        const found = await probeType(type);
+    // === PHASE 6: Deep Pulse Discovery ===
+    if (discoveryMode) {
+        console.log(`Deep Pulse [Force]: Finding links for ${videoId} (${type})...`);
+        const [audio, video] = await Promise.all([
+            (type === "audio" || type === "both") ? probeType("audio") : Promise.resolve(null),
+            (type === "video" || type === "both") ? probeType("video") : Promise.resolve(null)
+        ]);
+
         return NextResponse.json({
-            url: found?.url || null,
-            title: found?.title || "download",
-            status: found ? "found" : "failed"
+            audio: audio?.url || null,
+            video: video?.url || null,
+            title: audio?.title || video?.title || "download",
+            status: (audio || video) ? "found" : "failed",
+            engine: "DeepPulse V6"
         });
     }
 

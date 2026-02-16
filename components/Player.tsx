@@ -55,8 +55,9 @@ const Player = () => {
 
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
-    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'tunneling'>('probing');
-    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'verifying'>('ytdl');
+    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'tunneling' | 'scanning'>('probing');
+    const [statusMessage, setStatusMessage] = useState<string>("");
+    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'verifying' | 'mirror'>('ytdl');
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
@@ -247,24 +248,26 @@ const Player = () => {
             return null;
         };
 
-        // V5 Strategy: Backend Discovery Bridge (CORS Bypass)
+        // V6 Strategy: Deep Pulse Discovery Bridge (Force Mode Extraction)
         try {
-            console.log(`V5 Discovery Bridge: Offloading search for ${videoId} to server...`);
-            const discoveryRes = await fetchWithTimeout(`/api/download?id=${videoId}&type=${type}&action=discovery`, {}, 15000);
+            console.log(`V6 Deep Pulse: Offloading high-intensity search for ${videoId} to server...`);
+            setStatusMessage("Quantum Mirror Search (80+ Nodes)...");
+            const discoveryRes = await fetchWithTimeout(`/api/download?id=${videoId}&type=${type}&action=discovery`, {}, 20000);
             if (discoveryRes.ok) {
                 const data = await discoveryRes.json();
                 if (data.status === "found") {
-                    console.log("V5 Discovery: Server found usable mirrors!");
-                    return type === 'audio' ? data.audio : data.url; // Handle both 'type=audio' and 'type=both' (default) response shapes
+                    console.log("V6 Discovery: Server pulse successful!");
+                    return type === 'audio' ? data.audio : data.video || data.audio; // Handle V6 response shape
                 }
             }
         } catch (e) {
-            console.warn("V5 Discovery Bridge failed, falling back to V4 Pulsar mirrors...", e);
+            console.warn("V6 Discovery Bridge timeout, falling back to V4 Pulsar mirrors...", e);
         }
 
-        // V4 Strategy: Concurrent Polling in Parallel (Backup if bridge fails)
+        // V4 Strategy: Concurrent Polling in Parallel (Emergency Backup)
         try {
-            console.log(`V4 Pulsar: Launching concurrent search for ${videoId}...`);
+            console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
+            setStatusMessage("Engaging Emergency Mirror Fleet...");
 
             // 1. Concurrent Piped Probing (The main hope)
             const pipedResults = await Promise.all(PIPED_NODES.slice(0, 6).map(node => probePiped(node)));
@@ -355,9 +358,10 @@ const Player = () => {
                 console.warn(`Server tunnel failed for ${t}, switching to Client-Side Fallback...`, e);
             }
 
-            // Attempt 3: Client-Side Fallback (Directly query Cobalt from browser)
+            // Attempt 3: Client-Side Fallback (Deep Pulse Recovery)
             try {
-                console.log(`Engaging Client-Side Fallback for ${t}...`);
+                console.log(`Engaging Deep Pulse Discovery for ${t}...`);
+                setHubStatus('scanning');
                 const clientUrl = await clientSideProbe(currentTrack.id, t);
                 if (clientUrl) {
                     console.log(`Client-Side success! URL: ${clientUrl}`);
@@ -589,14 +593,20 @@ const Player = () => {
                                         {hubStatus === 'probing' && (
                                             <span className="flex items-center gap-2">
                                                 <Loader2 size={14} className="animate-spin text-[#1DB954]" />
-                                                Searching for best quality stream...
+                                                Analyzing YouTube protection layers...
+                                            </span>
+                                        )}
+                                        {hubStatus === 'scanning' && (
+                                            <span className="flex items-center gap-2 text-blue-400">
+                                                <Loader2 size={14} className="animate-spin" />
+                                                {statusMessage || "Searching global mirrors..."}
                                             </span>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-3">
                                                 <p className="flex items-center gap-2 text-sm text-white/90 font-medium">
                                                     <Loader2 size={16} className="animate-spin text-purple-500" />
-                                                    {downloadProgress > 0 ? `Downloading... ${downloadProgress}%` : "Establishing secure tunnel..."}
+                                                    {downloadProgress > 0 ? `Downloading... ${downloadProgress}%` : "Deploying Quantum Shield Tunnel..."}
                                                 </p>
                                                 <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
                                                     <div
@@ -606,8 +616,8 @@ const Player = () => {
                                                 </div>
                                             </div>
                                         )}
-                                        {hubStatus === 'ready' && "Download initiated check your downloads folder."}
-                                        {hubStatus === 'fallback' && "YouTube protection detected. Use the secure methods below."}
+                                        {hubStatus === 'ready' && "Success! Link decoupled from YouTube. Check downloads."}
+                                        {hubStatus === 'fallback' && "YouTube protection detected. Use the manual mirrors below."}
                                     </div>
                                 </div>
 
