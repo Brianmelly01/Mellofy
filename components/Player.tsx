@@ -163,6 +163,16 @@ const Player = () => {
         "https://invidious.projectsegfau.lt"
     ];
 
+    const COBALT_NODES = [
+        "https://cobalt.tools",
+        "https://co.wuk.sh",
+        "https://cobalt.api.unblocker.it",
+        "https://cobalt.q69.it",
+        "https://api.cobalt.tools",
+        "https://cobalt-api.v06.me",
+        "https://cobalt.sweet-pota.to"
+    ];
+
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
         const fetchWithTimeout = async (url: string, options: any, timeout = 6000) => {
             const controller = new AbortController();
@@ -243,40 +253,46 @@ const Player = () => {
             console.warn("V6 Nuclear Bridge timeout, falling back to V4 Pulsar mirrors...", e);
         }
 
-        // V4 Strategy: Concurrent Polling in Parallel (Emergency Backup)
+        const probeCobalt = async (instance: string): Promise<string | null> => {
+            try {
+                const res = await fetchWithTimeout(`${instance}/api/json`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                    body: JSON.stringify({
+                        url: `https://youtube.com/watch?v=${videoId}`,
+                        downloadMode: type === 'audio' ? 'audio' : 'auto',
+                        youtubeVideoCodec: 'h264'
+                    })
+                }, 10000);
+                if (res.ok) {
+                    const d = await res.json();
+                    return d.url || d.picker?.[0]?.url || null;
+                }
+            } catch (e) { }
+            return null;
+        };
+
+        // V4 Strategy: Unified High-Intensity Concurrent Shotgun (Singularity V11)
         try {
             console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
             setStatusMessage("Engaging Emergency Mirror Fleet...");
 
-            // 1. Concurrent Piped Probing (The main hope)
-            const pipedResults = await Promise.all(PIPED_NODES.slice(0, 6).map(node => probePiped(node)));
-            const workingPiped = pipedResults.find(r => r !== null);
-            if (workingPiped) return workingPiped;
+            const allNodes = [
+                ...PIPED_NODES.map(n => ({ type: 'piped' as const, url: n })),
+                ...INVIDIOUS_NODES.map(n => ({ type: 'invidious' as const, url: n })),
+                ...COBALT_NODES.map(n => ({ type: 'cobalt' as const, url: n }))
+            ].sort(() => Math.random() - 0.5);
 
-            // 2. Concurrent Invidious Probing (Backup)
-            const invResults = await Promise.all(INVIDIOUS_NODES.slice(0, 4).map(node => probeInvidious(node)));
-            const workingInv = invResults.find(r => r !== null);
-            if (workingInv) return workingInv;
-
-            // 3. Cobalt (Last resort automated)
-            // Restore COBALT_PUBLIC_INSTANCES locally for this block
-            const COBALT_INSTS = [
-                "https://cobalt.canine.tools",
-                "https://lc.vern.cc",
-                "https://cobalt.tools"
-            ];
-            for (const instance of COBALT_INSTS) {
-                try {
-                    const res = await fetchWithTimeout(`${instance}/api/json`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ url: `https://youtube.com/watch?v=${videoId}`, downloadMode: type === 'audio' ? 'audio' : 'auto' })
-                    });
-                    if (res.ok) {
-                        const d = await res.json();
-                        if (d.url) return d.url;
-                    }
-                } catch (e) { }
+            const batchSize = 6;
+            for (let i = 0; i < allNodes.length; i += batchSize) {
+                const batch = allNodes.slice(i, i + batchSize);
+                const results = await Promise.all(batch.map(node => {
+                    if (node.type === 'piped') return probePiped(node.url);
+                    if (node.type === 'invidious') return probeInvidious(node.url);
+                    return probeCobalt(node.url);
+                }));
+                const valid = results.find(url => url !== null);
+                if (valid) return valid;
             }
         } catch (globalErr) {
             console.error("V4 Engine failure:", globalErr);

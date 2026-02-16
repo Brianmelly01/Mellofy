@@ -102,7 +102,7 @@ async function verifyUrl(url: string, force: boolean = false): Promise<boolean> 
     // Phase 10: Hyper-Bridge Blind Extraction
     // YouTube detects HEAD requests from Vercel as bot signals. 
     // We now skip all pings for known video providers and trust them blindly.
-    const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt"];
+    const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt", "dl", "api"];
     if (knownDomains.some(d => url.includes(d))) {
         console.log(`Pulsar: Hyper-Bridge Blind Trust for ${url.substring(0, 40)}...`);
         return true;
@@ -127,45 +127,58 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     const headers = GET_PULSAR_HEADERS(force);
 
-    const tryParams = async (quality: string, tunnel: boolean) => {
-        try {
-            const base = instance.replace(/\/$/, "");
-            const endpoint = base.includes("api") ? base : `${base}/api/json`;
+    const base = instance.replace(/\/$/, "");
+    const endpoint = base.includes("api") ? base : `${base}/api/json`;
 
-            const res = await fetch(endpoint, {
+    const tryFetch = async (targetUrl: string) => {
+        try {
+            const res = await fetch(targetUrl, {
                 method: "POST",
                 headers: headers as any,
                 body: JSON.stringify({
                     url,
-                    videoQuality: quality,
+                    videoQuality: "720",
                     downloadMode: type === "audio" ? "audio" : "video",
                     youtubeVideoCodec: "h264",
                     aFormat: "best",
-                    isNoQuery: tunnel,
+                    isNoQuery: true,
                 }),
-                signal: AbortSignal.timeout(force ? 12000 : 7000),
+                signal: AbortSignal.timeout(force ? 15000 : 8000),
             });
-
             if (!res.ok) return null;
-            const data = await res.json();
-            if (data.status === "error") return null;
-
-            const resultUrl = data.url || (data.picker ? data.picker[0]?.url : null);
-            if (!resultUrl) return null;
-
-            if (await verifyUrl(resultUrl, force)) {
-                return { url: resultUrl, title: data.filename || "download", quality };
-            }
-            return null;
-        } catch (e) {
-            return null;
-        }
+            return await res.json();
+        } catch (e) { return null; }
     };
 
-    let result = await tryParams("1080", true);
-    if (!result) result = await tryParams("720", true);
-    if (!result && !force) result = await tryParams("360", true);
-    return result;
+    // Phase 11: Singularity Handshake (Omega Proxy Rotation)
+    let data = await tryFetch(endpoint);
+    if (!data) {
+        console.log(`Cobalt [Fail]: Engaging Infinity Proxy for ${instance}...`);
+        for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
+            try {
+                const proxyUrl = `${proxyBase}${encodeURIComponent(endpoint)}`;
+                const pRes = await fetch(proxyUrl, {
+                    method: "POST",
+                    headers: headers as any,
+                    body: JSON.stringify({ url, downloadMode: type === "audio" ? "audio" : "video" }),
+                    signal: AbortSignal.timeout(10000)
+                });
+                if (pRes.ok) {
+                    const text = await pRes.text();
+                    data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
+                    if (data) break;
+                }
+            } catch (pe) { }
+        }
+    }
+
+    if (data && data.status !== "error") {
+        const resultUrl = data.url || (data.picker ? data.picker[0]?.url : null);
+        if (resultUrl && await verifyUrl(resultUrl, force)) {
+            return { url: resultUrl, title: data.filename || "download", quality: "720" };
+        }
+    }
+    return null;
 }
 
 async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false): Promise<{ url: string; title: string } | null> {
