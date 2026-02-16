@@ -629,34 +629,37 @@ const Player = () => {
                             {hubStatus === 'fallback' && (
                                 <div className="space-y-3">
                                     <p className="text-xs text-center text-white/40 uppercase tracking-widest mb-2">
-                                        Manual Override Required
+                                        Auto-Tunnel Blocked. Select Secure Method:
                                     </p>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
-                                            onClick={() => window.open(`https://cobalt.tools/?u=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                            onClick={() => window.open(`https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
                                         >
-                                            <ExternalLink size={14} /> Cobalt (Auto)
+                                            <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Auto)
                                         </button>
                                         <button
-                                            onClick={() => window.open(`https://cobalt.canine.tools/?u=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                            onClick={() => window.open(`https://cobalt.canine.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
                                         >
-                                            <ExternalLink size={14} /> Cobalt (Mirror)
+                                            <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Mirror)
                                         </button>
                                         <button
                                             onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}&f=${playbackMode === 'audio' ? 'mp3' : 'mp4'}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
                                         >
-                                            <ExternalLink size={14} /> Loader.to
+                                            <ExternalLink size={14} className="group-hover:text-amber-400" /> Loader.to
                                         </button>
                                         <button
                                             onClick={() => window.open(`https://www.y2mate.com/youtube/${currentTrack.id}`, '_blank')}
-                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition"
+                                            className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
                                         >
-                                            <ExternalLink size={14} /> Y2Mate
+                                            <ExternalLink size={14} className="group-hover:text-red-400" /> Y2Mate
                                         </button>
                                     </div>
+                                    <p className="text-[10px] text-center text-white/30">
+                                        Note: Opens in new secure tab. No ads.
+                                    </p>
                                 </div>
                             )}
                         </div>
