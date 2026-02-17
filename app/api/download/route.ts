@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import ytdl from "@distube/ytdl-core";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -434,6 +435,26 @@ export async function GET(request: NextRequest) {
                     const found = results.find(res => res !== null);
                     if (found) { result = found; break; }
                 }
+            }
+
+            // === PHASE 1.5: Local Proton Core (YTDL Native Fallback) ===
+            // If the fleet failed, use the server's own IP to resolve the video
+            if (!result) {
+                try {
+                    console.log("Pulsar: Fleet failed, engaging Proton Core (YTDL)...");
+                    // ytdl is already imported at the top
+                    const info = await ytdl.getInfo(videoId);
+                    const format = type === "audio"
+                        ? ytdl.chooseFormat(info.formats, { quality: "highestaudio", filter: "audioonly" })
+                        : ytdl.chooseFormat(info.formats, { quality: "highestvideo", filter: (format: any) => format.container === 'mp4' });
+
+                    if (format && format.url) {
+                        result = {
+                            url: format.url,
+                            title: info.videoDetails.title || "download"
+                        };
+                    }
+                } catch (e) { console.error("Proton Core failed:", e); }
             }
 
             // === NEW: Server-Assisted Discovery Mode ===
