@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import { Figtree } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
+import { TopNav } from "@/components/TopNav";
+import { BottomNav } from "@/components/BottomNav";
 import Player from "@/components/Player";
 import AuthModal from "@/components/AuthModal";
 
 const font = Figtree({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mellofy - Spotify Clone",
+  title: "Mellofy - Music & Videos",
   description: "Listen to music and videos for free.",
 };
 
@@ -21,12 +22,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={font.className}>
         <AuthModal />
-        <div className="flex h-full">
-          <Sidebar />
-          <main className="h-full flex-1 overflow-y-auto py-2 pr-2">
-            {children}
-          </main>
-        </div>
+        <TopNav />
+        <main className="h-full overflow-y-auto bg-gradient-to-b from-neutral-900 via-black to-black">
+          {children}
+        </main>
+        <BottomNav />
         <Player />
       </body>
     </html>
