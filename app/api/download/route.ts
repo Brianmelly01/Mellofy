@@ -104,28 +104,155 @@ const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
 };
 
 async function verifyUrl(url: string, force: boolean = false): Promise<boolean> {
-    // Phase 10: Hyper-Bridge Blind Extraction
-    // YouTube detects HEAD requests from Vercel as bot signals. 
-    // We now skip all pings for known video providers and trust them blindly.
     const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt", "dl", "api", "youtube"];
     if (force || knownDomains.some(d => url.includes(d))) {
-        console.log(`Pulsar: Omnipresence Blind Trust for ${url.substring(0, 40)}...`);
         return true;
     }
-
     try {
-        const res = await fetch(url, {
-            method: "HEAD",
-            signal: AbortSignal.timeout(force ? 4000 : 2500)
-        });
+        const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(force ? 4000 : 2500) });
         if (!res.ok) return false;
-
         const contentType = res.headers.get("content-type") || "";
         return contentType.includes("video") || contentType.includes("audio") || contentType.includes("application/ogg") || contentType.includes("application/x-mpegurl") || contentType.includes("application/octet-stream");
     } catch (e) {
-        // In Hyper-Bridge mode, even a failed ping is treated as a success for trusted paths
         return true;
     }
+}
+
+// Direct InnerTube extraction — calls YouTube's own API with multiple client types
+// This is the most reliable method from Vercel since it doesn't depend on third-party services
+async function extractViaInnerTube(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    const sts = await SYNC_STS();
+
+    const clients = [
+        {
+            name: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+            version: "2.0",
+            apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+            ua: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.2 Chrome/131.0.0.0 TV Safari/537.36"
+        },
+        {
+            name: "TV_EMBEDDED",
+            version: "2.0",
+            apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+            ua: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.2 Chrome/131.0.0.0 TV Safari/537.36"
+        },
+        {
+            name: "ANDROID_MUSIC",
+            version: "7.27.52",
+            apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+            ua: "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 14; en_US; Pixel 9; Build/AP1A.240505.004) gzip"
+        },
+        {
+            name: "ANDROID",
+            version: "19.12.35",
+            apiKey: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+            ua: "com.google.android.youtube/19.12.35 (Linux; U; Android 14; en_US; Pixel 9; Build/AP1A.240505.004) gzip"
+        },
+        {
+            name: "IOS",
+            version: "19.45.4",
+            apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
+            ua: "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)"
+        },
+    ];
+
+    for (const client of clients) {
+        try {
+            console.log(`InnerTube: Trying ${client.name}...`);
+            const payload: any = {
+                videoId,
+                context: {
+                    client: {
+                        clientName: client.name,
+                        clientVersion: client.version,
+                        hl: "en",
+                        gl: "US",
+                    }
+                },
+                playbackContext: {
+                    contentPlaybackContext: {
+                        signatureTimestamp: sts
+                    }
+                }
+            };
+
+            // Android/iOS clients need extra fields
+            if (client.name.includes("ANDROID")) {
+                payload.context.client.androidSdkVersion = 34;
+                payload.context.client.platform = "MOBILE";
+                payload.context.client.osName = "Android";
+                payload.context.client.osVersion = "14";
+            }
+            if (client.name === "IOS") {
+                payload.context.client.deviceMake = "Apple";
+                payload.context.client.deviceModel = "iPhone16,2";
+                payload.context.client.platform = "MOBILE";
+                payload.context.client.osName = "iOS";
+                payload.context.client.osVersion = "18.1.0.22B83";
+            }
+
+            const res = await fetch(
+                `https://www.youtube.com/youtubei/v1/player?key=${client.apiKey}&prettyPrint=false`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "User-Agent": client.ua,
+                        "X-Goog-Api-Key": client.apiKey,
+                        "Origin": "https://www.youtube.com",
+                    },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(10000),
+                }
+            );
+
+            if (!res.ok) { console.log(`InnerTube: ${client.name} HTTP ${res.status}`); continue; }
+            const data = await res.json();
+
+            // Check for playability
+            if (data.playabilityStatus?.status !== "OK") {
+                console.log(`InnerTube: ${client.name} playability: ${data.playabilityStatus?.status}`);
+                continue;
+            }
+
+            const formats = [
+                ...(data.streamingData?.adaptiveFormats || []),
+                ...(data.streamingData?.formats || [])
+            ];
+
+            if (formats.length === 0) { console.log(`InnerTube: ${client.name} no formats`); continue; }
+
+            // Filter for formats with direct URLs (no signatureCipher)
+            const directFormats = formats.filter((f: any) => f.url && !f.signatureCipher && !f.cipher);
+            if (directFormats.length === 0) { console.log(`InnerTube: ${client.name} all formats are ciphered`); continue; }
+
+            let format;
+            if (type === "audio") {
+                format = directFormats.find((f: any) => f.mimeType?.includes("audio/mp4"))
+                    || directFormats.find((f: any) => f.mimeType?.includes("audio/webm"))
+                    || directFormats.find((f: any) => f.mimeType?.includes("audio"));
+            } else {
+                format = directFormats.find((f: any) => f.mimeType?.includes("video/mp4") && f.qualityLabel === "720p")
+                    || directFormats.find((f: any) => f.mimeType?.includes("video/mp4") && f.qualityLabel === "480p")
+                    || directFormats.find((f: any) => f.mimeType?.includes("video/mp4") && f.url)
+                    || directFormats.find((f: any) => f.mimeType?.includes("video") && f.url);
+            }
+
+            if (format?.url) {
+                console.log(`InnerTube: ${client.name} SUCCESS — found ${type} stream`);
+                return {
+                    url: format.url,
+                    title: data.videoDetails?.title || "download"
+                };
+            }
+        } catch (e) {
+            console.log(`InnerTube: ${client.name} error:`, e);
+            continue;
+        }
+    }
+
+    console.log("InnerTube: All clients exhausted");
+    return null;
 }
 
 async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string; quality?: string } | null> {
@@ -397,8 +524,14 @@ export async function GET(request: NextRequest) {
 
             let result: { url: string; title: string } | null = null;
 
+            // === PHASE 0: Direct InnerTube Extraction (Most Reliable) ===
+            if (videoId) {
+                console.log("Phase 0: InnerTube direct extraction...");
+                result = await extractViaInnerTube(videoId, type === "audio" ? "audio" : "video");
+            }
+
             // === PHASE 1: Try Fleet (Hyper-Bridge V10 Turbo) ===
-            if (!skipProbe) {
+            if (!result && !skipProbe) {
                 const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
                 const batchSize = 25;
                 const limit = 400;
