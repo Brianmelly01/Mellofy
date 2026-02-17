@@ -12,64 +12,35 @@ const PROXY_ROTATION = [
     "https://api.codetabs.com/v1/proxy?quest="
 ];
 
+// Cobalt instances — verified working, use POST / with Accept/Content-Type JSON headers
 const COBALT_INSTANCES = [
     "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
     "https://co.eepy.moe",
-    "https://cobalt.red",
-    "https://cobalt.best",
-    "https://cobalt.03c8.net",
-    "https://cobalt.miz.icu",
-    "https://cobalt.inst.moe",
-    "https://cobalt.vps.moe",
-    "https://cobalt.perv.cat",
-    "https://cobalt.sh",
-    "https://co.wuk.be",
-    "https://cobalt.cloud.it",
-    "https://cobalt.io.no",
-    "https://cobalt.pinter.io",
-    "https://cobalt.ponta.xyz",
-    "https://cobalt.reaper.network",
-    "https://cobalt.unlimited.moe",
-    "https://cobalt.vps.me",
-    "https://cobalt.api.lib.re",
-    "https://cobalt.nexus.sh",
-    "https://cobalt.cat.io",
-    "https://cobalt.wolf.me",
-    "https://cobalt.dev.ar",
-    "https://cobalt.pi.xyz",
-    "https://cobalt.moe",
+    "https://cobalt.tools",
+    "https://api.cobalt.tools",
 ];
 
-const PROXY_INSTANCES = [
-    // Invidious Fleet (The Giants)
-    "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
-    "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
-    "https://invidious.lunar.icu", "https://iv.nautile.io", "https://invidious.einfach.org", "https://yt.artemislena.eu",
-    "https://inv.riverside.rocks", "https://invidious.sethforprivacy.com", "https://invidious.tiekoetter.com",
-    "https://iv.cyberspace.moe", "https://invidious.no-logs.com", "https://inv.us.projectsegfau.lt", "https://invidious.fdn.fr",
-    "https://inv.cat.net", "https://invidious.drgns.space", "https://inv.pistasjis.net", "https://invidious.jing.rocks",
-    "https://iv.libRedirect.eu", "https://invidious.privacydev.net", "https://iv.melmac.space", "https://invidious.pablouser.io",
-    "https://inv.nadeko.net", "https://yewtu.be", "https://invidious.nerdvpn.de", "https://inv.tux.pizza",
-    "https://invidious.protokolla.fi", "https://invidious.private.coffee", "https://yt.drgnz.club", "https://iv.datura.network",
-    // Piped Fleet (The Discovery Spears)
-    "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
-    "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
-    "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
-    "https://pipedapi.moom.work", "https://pipedapi.systilly.xyz", "https://pipedapi.nosebs.rocks",
-    "https://api.piped.privacy.com.de", "https://pipedapi.palash.dev", "https://pipedapi.garudalinux.org",
-    "https://api-piped.mha.fi", "https://piped-api.us.projectsegfau.lt", "https://pipedapi.drgns.space",
-    "https://pipedapi.rinu.xyz", "https://api.piped.yt", "https://pipedapi.astartes.rocks",
-    "https://piped-api.ext.moe", "https://pipedapi.ducks.it", "https://pipedapi.xyz", "https://pipedapi.no",
-    "https://pipedapi.it", "https://piped-api.kavin.rocks", "https://pipedapi.privacy.dev",
-    "https://piped-api.loli.net", "https://pipedapi.moemoe.me", "https://api.piped.projectsegfault.lt"
+// Piped API instances — verified as recently up
+const PIPED_INSTANCES = [
+    "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
+    "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
+    "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
+    "https://api.piped.yt", "https://pipedapi.r4fo.com",
+    "https://pipedapi.colinslegacy.com", "https://pipedapi.rivo.lol",
 ];
+
+// Invidious instances — NOTE: most have api:false, used as last resort
+const INVIDIOUS_INSTANCES = [
+    "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
+];
+
+// Combined proxy fleet for legacy code paths
+const PROXY_INSTANCES = [...PIPED_INSTANCES, ...INVIDIOUS_INSTANCES];
 
 const STABLE_FALLBACKS = [
     "https://cobalt.tools",
     "https://cobalt.canine.tools",
-    "https://cobalt.meowing.de",
-    "https://co.eepy.moe",
 ];
 
 // V25: Chronos Engine (Real-time STS Sync)
@@ -159,23 +130,27 @@ async function verifyUrl(url: string, force: boolean = false): Promise<boolean> 
 
 async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string; quality?: string } | null> {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const headers = GET_PULSAR_HEADERS(force, incomingUA);
 
     const base = instance.replace(/\/$/, "");
-    const endpoint = base.includes("api") ? base : `${base}/api/json`;
+    // Cobalt API v10+: endpoint is POST / (not /api/json)
+    const endpoint = base.endsWith("/api") || base.includes("api.") ? base : `${base}`;
+
+    const cobaltHeaders = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    };
 
     const tryFetch = async (targetUrl: string) => {
         try {
             const res = await fetch(targetUrl, {
                 method: "POST",
-                headers: headers as any,
+                headers: cobaltHeaders,
                 body: JSON.stringify({
                     url,
                     videoQuality: "720",
-                    downloadMode: type === "audio" ? "audio" : "video",
+                    downloadMode: type === "audio" ? "audio" : "auto",
                     youtubeVideoCodec: "h264",
-                    aFormat: "best",
-                    isNoQuery: true,
+                    audioFormat: "best",
                 }),
                 signal: AbortSignal.timeout(force ? 15000 : 8000),
             });
@@ -184,17 +159,17 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
         } catch (e) { return null; }
     };
 
-    // Phase 11: Singularity Handshake (Omega Proxy Rotation)
+    // Try direct POST / first
     let data = await tryFetch(endpoint);
     if (!data) {
-        console.log(`Cobalt [Fail]: Engaging Infinity Proxy for ${instance}...`);
+        console.log(`Cobalt [Fail]: Direct failed for ${instance}, trying CORS proxy...`);
         for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
             try {
                 const proxyUrl = `${proxyBase}${encodeURIComponent(endpoint)}`;
                 const pRes = await fetch(proxyUrl, {
                     method: "POST",
-                    headers: headers as any,
-                    body: JSON.stringify({ url, downloadMode: type === "audio" ? "audio" : "video" }),
+                    headers: cobaltHeaders,
+                    body: JSON.stringify({ url, downloadMode: type === "audio" ? "audio" : "auto" }),
                     signal: AbortSignal.timeout(10000)
                 });
                 if (pRes.ok) {
@@ -206,6 +181,7 @@ async function tryCobalt(instance: string, videoId: string, type: string, force:
         }
     }
 
+    // Cobalt v10 response: status is "tunnel", "redirect", "picker", or "error"
     if (data && data.status !== "error") {
         const resultUrl = data.url || (data.picker ? data.picker[0]?.url : null);
         if (resultUrl && await verifyUrl(resultUrl, force)) {
@@ -498,14 +474,17 @@ export async function GET(request: NextRequest) {
             // === PHASE 3: YTDL Fallback (InnerTube) ===
             if (!result?.url) {
                 console.log("Pulsar: Engaging YTDL InnerTube extraction...");
-                const ytdl = require("@distube/ytdl-core");
-                const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                    requestOptions: { headers: GET_PULSAR_HEADERS(true) }
-                });
-                const format = type === "audio"
-                    ? ytdl.filterFormats(info.formats, "audioonly")[0]
-                    : ytdl.filterFormats(info.formats, "videoandaudio")[0];
-                if (format?.url) result = { url: format.url, title: info.videoDetails.title };
+                try {
+                    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
+                        requestOptions: { headers: GET_PULSAR_HEADERS(true) }
+                    });
+                    const format = type === "audio"
+                        ? ytdl.filterFormats(info.formats, "audioonly")[0]
+                        : ytdl.filterFormats(info.formats, "videoandaudio")[0];
+                    if (format?.url) result = { url: format.url, title: info.videoDetails.title };
+                } catch (ytdlErr) {
+                    console.error("YTDL Phase 3 failed:", ytdlErr);
+                }
             }
 
             if (!result?.url) throw new Error("Pulsar-Core: All extraction methods failed");
@@ -524,9 +503,9 @@ export async function GET(request: NextRequest) {
             headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
             headers.set("X-Pulsar-Core", "ytdl");
             return new NextResponse(streamResponse.body, { headers });
-        } catch (e) {
+        } catch (e: any) {
             console.error("Pulsar-Core Interrupted:", e);
-            return NextResponse.json({ error: "Pulsar connection reset." }, { status: 500 });
+            return NextResponse.json({ error: `Download failed: ${e?.message || "All extraction methods exhausted"}. Try again or use cobalt.tools directly.` }, { status: 500 });
         }
     }
 
@@ -536,7 +515,6 @@ export async function GET(request: NextRequest) {
         let result;
         // Layer 1: Pulsar Human Simulation (InnerTube + Curated PoToken)
         try {
-            const ytdl = require("@distube/ytdl-core");
             const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
                 requestOptions: { headers: GET_PULSAR_HEADERS(force) }
             });

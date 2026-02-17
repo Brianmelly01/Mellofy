@@ -1,23 +1,20 @@
 
-// V4 ULTIMATE PROBE CONSTANTS
+// V5 ULTIMATE PROBE CONSTANTS — refreshed to currently-live instances
 export const PIPED_NODES = [
-    "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
-    "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
-    "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
-    "https://api.piped.projectsegfault.lt", "https://piped-api.loli.net", "https://pipedapi.moemoe.me"
+    "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
+    "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
+    "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
+    "https://api.piped.yt", "https://pipedapi.r4fo.com",
+    "https://pipedapi.colinslegacy.com", "https://pipedapi.rivo.lol",
 ];
 
 export const INVIDIOUS_NODES = [
-    "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
-    "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
-    "https://invidious.lunar.icu", "https://iv.nautile.io", "https://iv.libRedirect.eu", "https://invidious.privacydev.net",
-    "https://inv.nadeko.net", "https://yewtu.be", "https://invidious.nerdvpn.de", "https://inv.tux.pizza"
+    "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
 ];
 
 export const COBALT_NODES = [
-    "https://cobalt.tools", "https://co.wuk.sh", "https://cobalt.api.unblocker.it", "https://cobalt.q69.it",
-    "https://api.cobalt.tools", "https://cobalt-api.v06.me", "https://cobalt.sweet-pota.to", "https://cobaltt.tools",
-    "https://cobalt.canine.tools", "https://lc.vern.cc", "https://cobalt.meowing.de", "https://co.eepy.moe"
+    "https://cobalt.tools", "https://api.cobalt.tools",
+    "https://cobalt.canine.tools", "https://cobalt.meowing.de", "https://co.eepy.moe",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
@@ -67,20 +64,27 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
         try {
-            const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/json`)}&force=true`;
+            // Cobalt API v10+: POST / with JSON headers (not /api/json)
+            const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(instance)}&force=true`;
             const payload = {
                 url: `https://youtube.com/watch?v=${videoId}`,
                 downloadMode: type === 'audio' ? 'audio' : 'auto',
-                youtubeVideoCodec: 'h264'
+                youtubeVideoCodec: 'h264',
+                videoQuality: '720',
             };
             const res = await fetchWithTimeout(bridgeUrl, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
                 body: JSON.stringify(payload)
             }, 12000).catch(() => null);
 
             if (res && res.ok) {
                 const d = await res.json();
+                // Cobalt v10: status is tunnel/redirect/picker/error
+                if (d.status === 'error') return null;
                 return d.url || d.picker?.[0]?.url || null;
             }
         } catch (e) { }
@@ -140,7 +144,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
 
     // V4 Strategy: Unified Ultra-Intensity Relayed Shotgun
     try {
-        console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
+        console.log(`V5 Pulsar: Launching concurrent search for ${videoId}...`);
 
         const allNodes = [
             { type: 'premium' as const, url: 'direct' },
@@ -149,7 +153,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             ...COBALT_NODES.map(n => ({ type: 'cobalt' as const, url: n }))
         ].sort((a) => a.type === 'premium' ? -1 : (Math.random() - 0.5));
 
-        const batchSize = 30;
+        const batchSize = 15;
         for (let i = 0; i < allNodes.length; i += batchSize) {
             const batch = allNodes.slice(i, i + batchSize);
             const results = await Promise.all(batch.map((node: any) => {

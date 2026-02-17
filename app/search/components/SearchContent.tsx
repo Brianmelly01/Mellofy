@@ -127,7 +127,34 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
 
                 console.log("Attempting API proxy download...");
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`Proxy failed: ${response.status}`);
+                if (!response.ok) {
+                    // Auto-retry once with force=true
+                    console.log("First proxy attempt failed, retrying with force...");
+                    const retryUrl = apiUrl.includes('force=true') ? apiUrl : `${apiUrl}&force=true`;
+                    const retryResponse = await fetch(retryUrl);
+                    if (!retryResponse.ok) throw new Error(`Download unavailable (${retryResponse.status})`);
+                    // Use retry response
+                    const retryContentLength = retryResponse.headers.get('content-length');
+                    const retryTotal = retryContentLength ? parseInt(retryContentLength, 10) : 0;
+                    let retryLoaded = 0;
+                    const retryReader = retryResponse.body?.getReader();
+                    if (!retryReader) throw new Error("Stream not supported");
+                    const retryChunks: BlobPart[] = [];
+                    while (true) {
+                        const { done, value } = await retryReader.read();
+                        if (done) break;
+                        if (value) {
+                            retryChunks.push(value);
+                            retryLoaded += value.length;
+                            if (retryTotal > 0) {
+                                setDownloadProgress(10 + Math.floor((retryLoaded / retryTotal) * 90));
+                            } else {
+                                setDownloadProgress(Math.min(95, 10 + Math.floor(retryLoaded / 1000000 * 5)));
+                            }
+                        }
+                    }
+                    return new Blob(retryChunks, { type: targetType === 'audio' ? 'audio/m4a' : 'video/mp4' });
+                }
 
                 const contentLength = response.headers.get('content-length');
                 const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -187,22 +214,10 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         } catch (err: any) {
             console.error("Download error:", err);
 
-            // 4. Final Fallback: Window.open (Redirection)
-            if (confirm(`Seamless download failed. Would you like to try opening the direct link in a new tab? (Checkpoint 2)\n\nError: ${err.message}`)) {
-                try {
-                    // Check cache first
-                    if (lastDirectUrl) {
-                        window.open(lastDirectUrl, '_blank');
-                        return;
-                    }
-                    // Only re-probe if cache empty (rare)
-                    const directUrl = await clientSideProbe(track.id, type === 'both' ? 'video' : type);
-                    if (directUrl) {
-                        window.open(directUrl, '_blank');
-                        return;
-                    }
-                    alert("Could not find a working link even for manual download.");
-                } catch (e) { }
+            // 4. Final Fallback: Cobalt.tools redirect
+            const cobaltUrl = `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${track.id}`)}`;
+            if (confirm(`Download failed. Would you like to open cobalt.tools to download this track directly?\n\nThis will open in a new tab.`)) {
+                window.open(cobaltUrl, '_blank');
             }
         } finally {
             setDownloadingId(null);
