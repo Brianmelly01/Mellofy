@@ -14,18 +14,20 @@ const PROXY_ROTATION = [
 
 // Cobalt instances — verified working, use POST / with Accept/Content-Type JSON headers
 const COBALT_INSTANCES = [
-    "https://cobalt.tools",
     "https://api.cobalt.tools",
-    "https://cobalt.canine.tools",
     "https://cobalt.meowing.de",
     "https://co.eepy.moe",
-    "https://cobalt.q69.it",
     "https://cobalt-api.v06.me",
-    "https://cobalt.sweet-pota.to",
+    "https://api.cobalt.kwiatekmiki.pl",
+    "https://cobalt.154.53.53.53.sslip.io",
+    "https://cobalt.q69.it",
     "https://cobaltt.tools",
     "https://lc.vern.cc",
-    "https://api.cobalt.kwiatekmiki.pl",
-    "https://cobalt.154.53.53.53.sslip.io", // Direct IP fallback
+    "https://cobalt.xy24.eu.org",
+    "https://cobalt.kinuseka.net",
+    "https://co.wuk.sh",
+    "https://cobalt.exozy.me",
+    "https://cobalt.majhcc.xyz",
 ];
 
 // Piped API instances — verified as recently up
@@ -263,66 +265,59 @@ async function extractViaInnerTube(videoId: string, type: string): Promise<{ url
 }
 
 async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string; quality?: string } | null> {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-
-    const base = instance.replace(/\/$/, "");
-    // Cobalt API v10+: endpoint is POST / (not /api/json)
-    const endpoint = base.endsWith("/api") || base.includes("api.") ? base : `${base}`;
+    const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
     const cobaltHeaders = {
         "Accept": "application/json",
         "Content-Type": "application/json",
+        "User-Agent": incomingUA || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     };
 
-    const tryFetch = async (targetUrl: string) => {
+    const attemptFetch = async (endpoint: string, isV10: boolean) => {
         try {
-            const res = await fetch(targetUrl, {
+            const payload = isV10 ? {
+                url: targetUrl,
+                videoQuality: "720",
+                downloadMode: type === "audio" ? "audio" : "auto",
+                youtubeVideoCodec: "h264",
+                alwaysProxy: false,
+            } : {
+                url: targetUrl,
+                vCodec: 'h264',
+                vQuality: '720',
+                isAudioOnly: type === 'audio',
+            };
+
+            const res = await fetch(endpoint, {
                 method: "POST",
                 headers: cobaltHeaders,
-                body: JSON.stringify({
-                    url,
-                    videoQuality: "720",
-                    downloadMode: type === "audio" ? "audio" : "auto",
-                    youtubeVideoCodec: "h264",
-                    audioFormat: "best",
-                }),
-                signal: AbortSignal.timeout(force ? 15000 : 8000),
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(8000),
             });
-            if (!res.ok) return null;
-            return await res.json();
-        } catch (e) { return null; }
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'error' || data.status === 'picker') return null;
+                const resultUrl = data.url || data.picker?.[0]?.url;
+                if (resultUrl) {
+                    return { url: resultUrl, title: data.filename || "download", quality: "720" };
+                }
+            }
+        } catch (e) { }
+        return null;
     };
 
-    // Try direct POST / first
-    let data = await tryFetch(endpoint);
-    if (!data) {
-        console.log(`Cobalt [Fail]: Direct failed for ${instance}, trying CORS proxy...`);
-        for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
-            try {
-                const proxyUrl = `${proxyBase}${encodeURIComponent(endpoint)}`;
-                const pRes = await fetch(proxyUrl, {
-                    method: "POST",
-                    headers: cobaltHeaders,
-                    body: JSON.stringify({ url, downloadMode: type === "audio" ? "audio" : "auto" }),
-                    signal: AbortSignal.timeout(10000)
-                });
-                if (pRes.ok) {
-                    const text = await pRes.text();
-                    data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
-                    if (data) break;
-                }
-            } catch (pe) { }
-        }
+    // Try v10 (root) first
+    let result = await attemptFetch(instance, true);
+    if (result) return result;
+
+    // Try v7 (/api/json) fallback
+    if (!instance.includes('/api/json')) {
+        const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
+        result = await attemptFetch(v7Url, false);
     }
 
-    // Cobalt v10 response: status is "tunnel", "redirect", "picker", or "error"
-    if (data && data.status !== "error") {
-        const resultUrl = data.url || (data.picker ? data.picker[0]?.url : null);
-        if (resultUrl && await verifyUrl(resultUrl, force)) {
-            return { url: resultUrl, title: data.filename || "download", quality: "720" };
-        }
-    }
-    return null;
+    return result;
 }
 
 async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string } | null> {
