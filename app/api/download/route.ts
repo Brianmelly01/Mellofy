@@ -557,9 +557,9 @@ export async function GET(request: NextRequest) {
                 if (i > limit) break;
                 const batch = fullFleet.slice(i, i + batchSize);
                 const results = await Promise.all(batch.map(instance => {
-                    if (instance.includes("cobalt")) return tryCobalt(instance, videoId, t, force);
-                    if (instance.includes("piped")) return tryPiped(instance, videoId, t, force);
-                    return tryInvidious(instance, videoId, t, force);
+                    if (instance.includes("cobalt")) return tryCobalt(instance, videoId || "", t, force);
+                    if (instance.includes("piped")) return tryPiped(instance, videoId || "", t, force);
+                    return tryInvidious(instance, videoId || "", t, force);
                 }));
                 result = results.find(r => r !== null);
                 if (result) break;
