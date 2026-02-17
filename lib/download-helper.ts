@@ -47,7 +47,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
-        const tryEndpoint = async (endpoint: string, isV10: boolean) => {
+        const tryEndpoint = async (endpoint: string, isV10: boolean, useProxy: boolean = false) => {
             try {
                 const payload = isV10 ? {
                     url: `https://youtube.com/watch?v=${videoId}`,
@@ -62,7 +62,11 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     isAudioOnly: type === 'audio',
                 };
 
-                const res = await fetchWithTimeout(endpoint, {
+                const targetUrl = useProxy
+                    ? `https://corsproxy.io/?${encodeURIComponent(endpoint)}`
+                    : endpoint;
+
+                const res = await fetchWithTimeout(targetUrl, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -72,35 +76,42 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     referrerPolicy: "no-referrer",
                     credentials: "omit",
                     mode: "cors",
-                }, 5000); // Removed catch here to capture error in outer block
+                }, useProxy ? 10000 : 5000);
 
                 if (res.ok) {
                     const d = await res.json();
                     if (d.status === 'error' || d.status === 'picker') {
-                        log(`${instance} (${isV10 ? 'v10' : 'v7'}) returned status: ${d.status}`);
+                        log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) status: ${d.status}`);
                         return null;
                     }
                     if (d.url || d.picker?.[0]?.url) {
-                        log(`${instance} (${isV10 ? 'v10' : 'v7'}) SUCCESS`);
+                        log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) SUCCESS`);
                         return d.url || d.picker?.[0]?.url;
                     }
                 } else {
-                    log(`${instance} (${isV10 ? 'v10' : 'v7'}) HTTP ${res.status}`);
+                    log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) HTTP ${res.status}`);
                 }
             } catch (e: any) {
-                log(`${instance} (${isV10 ? 'v10' : 'v7'}) Failed: ${e.message || 'Network/CORS'}`);
+                log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) Failed: ${e.message || 'CORS/Net'}`);
             }
             return null;
         };
 
-        const url = await tryEndpoint(instance, true);
+        // 1. Try Direct v10
+        let url = await tryEndpoint(instance, true, false);
         if (url) return url;
 
+        // 2. Try Direct v7
         if (!instance.includes('/api/json')) {
             const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
-            const v7Result = await tryEndpoint(v7Url, false);
-            if (v7Result) return v7Result;
+            url = await tryEndpoint(v7Url, false, false);
+            if (url) return url;
         }
+
+        // 3. Try Proxy v10 (Last Resort)
+        // Only try proxy if direct failed. corsproxy.io works well for JSON POST.
+        url = await tryEndpoint(instance, true, true);
+        if (url) return url;
 
         return null;
     };
