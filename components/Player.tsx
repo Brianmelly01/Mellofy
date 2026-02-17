@@ -517,6 +517,41 @@ const Player = () => {
 
                 {/* Controls (Right) */}
                 <div className="flex items-center gap-x-3 w-[40%] justify-end pr-1">
+                    <div className="relative" ref={downloadMenuRef}>
+                        <button
+                            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                            className="p-2 text-white hover:text-green-400 transition"
+                            title="Download"
+                        >
+                            <Download size={24} strokeWidth={2.5} />
+                        </button>
+
+                        {showDownloadMenu && (
+                            <div className="absolute bottom-full right-0 mb-2 bg-neutral-900 border border-white/10 rounded-xl p-2 shadow-2xl min-w-[140px] z-50">
+                                <button
+                                    onClick={() => handleDownload('audio')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-sm text-white"
+                                >
+                                    <Music size={16} />
+                                    Audio Only
+                                </button>
+                                <button
+                                    onClick={() => handleDownload('video')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-sm text-white"
+                                >
+                                    <Video size={16} />
+                                    Video Only
+                                </button>
+                                <button
+                                    onClick={() => handleDownload('both')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-sm text-green-400 font-bold"
+                                >
+                                    <Download size={16} />
+                                    Both
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <button
                         onClick={togglePlay}
                         className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
-import { Play, Video, Music, Loader2 } from "lucide-react";
+import { Play, Video, Music, Loader2, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
@@ -131,6 +131,14 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                         >
                             <Video size={18} strokeWidth={2.5} />
                         </button>
+                        <a
+                            href={`/api/download?id=${song.id}&type=both&pipe=true`}
+                            download
+                            className="p-3 bg-green-600/20 hover:bg-green-600/30 rounded-full text-green-400 transition-all border border-green-500/20"
+                            title="Download"
+                        >
+                            <Download size={18} strokeWidth={2.5} />
+                        </a>
                     </div>
                 </div>
             ))}
