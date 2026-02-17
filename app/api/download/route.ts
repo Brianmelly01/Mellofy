@@ -301,6 +301,10 @@ async function tryInvidious(instance: string, videoId: string, type: string, for
     } catch (e) { return null; }
 }
 
+// Phase 12: Mirror Handshake (Allow POST for Cobalt/Piped Proxies)
+export async function POST(request: NextRequest) {
+    return GET(request);
+}
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
