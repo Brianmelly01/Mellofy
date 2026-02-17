@@ -3,6 +3,7 @@
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { Play, Video, Music, Loader2, Download } from "lucide-react";
 import { useEffect, useState } from "react";
+import { clientSideProbe } from "@/lib/download-helper";
 
 interface SearchContentProps {
     term?: string;
@@ -52,9 +53,19 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             setDownloadProgress(0);
 
             try {
-                const apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
-                setDownloadProgress(5);
+                // Phase 1: Client-Side Probe (Bypasses Vercel IP blocking)
+                console.log(`Phase 1: Probing client-side for ${targetType}...`);
+                let directUrl = await clientSideProbe(track.id, targetType);
+                let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
 
+                if (directUrl) {
+                    console.log("Phase 1 Success: Found direct URL, proxying via server...");
+                    apiUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
+                } else {
+                    console.log("Phase 1 Failed: Falling back to server-side extraction...");
+                }
+
+                setDownloadProgress(5);
                 const response = await fetch(apiUrl);
                 if (!response.ok) throw new Error(`Server error (${response.status})`);
 
