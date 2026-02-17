@@ -2,9 +2,7 @@
 
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { Play, Video, Music, Loader2, Download } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { clientSideProbe } from "@/lib/download-helper";
 
 interface SearchContentProps {
     term?: string;
@@ -15,8 +13,6 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     const [results, setResults] = useState<Track[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [downloadingId, setDownloadingId] = useState<string | null>(null);
-    const [downloadProgress, setDownloadProgress] = useState(0);
 
     useEffect(() => {
         if (!term) {
@@ -55,173 +51,19 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         setQueue(results);
     };
 
-    const handleDownload = async (track: Track, type: 'audio' | 'video' | 'both') => {
-        setDownloadingId(track.id);
-        setDownloadProgress(0);
+    const handleDownload = (track: Track, type: 'audio' | 'video' | 'both') => {
+        const ytUrl = encodeURIComponent(`https://www.youtube.com/watch?v=${track.id}`);
 
-        let lastDirectUrl: string | null = null;
-
-        try {
-            console.log(`Initiating download for ${track.title} (${type})...`);
-
-            // 1. Probe for a direct URL using the robust fleet system
-            // This avoids CORS issues and uses multiple fallback strategies
-
-            const attemptDownload = async (targetType: 'audio' | 'video') => {
-                setDownloadProgress(5);
-                console.log(`Probing for ${targetType} source...`);
-
-                // 1. Client-Side Probe
-                let directUrl = await clientSideProbe(track.id, targetType);
-                console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
-                console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
-
-                if (directUrl) lastDirectUrl = directUrl;
-
-                // 2. Try Direct Client-Side Fetch (Best for performance + no server load)
-                if (directUrl) {
-                    try {
-                        console.log("Attempting direct client-side fetch...");
-                        const response = await fetch(directUrl);
-                        if (response.ok) {
-                            const blob = await response.blob();
-                            console.log("Direct client fetch successful!");
-                            return blob;
-                        }
-                    } catch (e) {
-                        console.warn("Direct client fetch failed (likely CORS). Falling back to proxy...", e);
-                    }
-                }
-
-                // === NEW: Server-Assisted Discovery (Agent + Server Collaboration) ===
-                // If client probe failed, ask server to find a link for us (but don't proxy yet)
-                if (!directUrl) {
-                    try {
-                        console.log("Engaging Server-Assisted Discovery...");
-                        const discoveryUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&get_url=true`;
-                        const discRes = await fetch(discoveryUrl);
-                        if (discRes.ok) {
-                            const discData = await discRes.json();
-                            if (discData.url) {
-                                console.log("Server found a direct link!", discData.url);
-                                directUrl = discData.url;
-                                lastDirectUrl = discData.url; // Cache it!
-
-                                // Try fetching this server-discovered link directly
-                                try {
-                                    const response = await fetch(discData.url);
-                                    if (response.ok) {
-                                        return await response.blob();
-                                    }
-                                } catch (e) { console.warn("Server-discovered link failed CORS fetch, falling back to proxy."); }
-                            }
-                        }
-                    } catch (e) { console.warn("Server discovery failed.", e); }
-                }
-
-                // 3. Fallback to API Proxy
-                let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true`;
-                if (directUrl) {
-                    apiUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
-                }
-
-                console.log("Attempting API proxy download...");
-                const response = await fetch(apiUrl);
-                if (!response.ok) {
-                    // Auto-retry once with force=true
-                    console.log("First proxy attempt failed, retrying with force...");
-                    const retryUrl = apiUrl.includes('force=true') ? apiUrl : `${apiUrl}&force=true`;
-                    const retryResponse = await fetch(retryUrl);
-                    if (!retryResponse.ok) throw new Error(`Download unavailable (${retryResponse.status})`);
-                    // Use retry response
-                    const retryContentLength = retryResponse.headers.get('content-length');
-                    const retryTotal = retryContentLength ? parseInt(retryContentLength, 10) : 0;
-                    let retryLoaded = 0;
-                    const retryReader = retryResponse.body?.getReader();
-                    if (!retryReader) throw new Error("Stream not supported");
-                    const retryChunks: BlobPart[] = [];
-                    while (true) {
-                        const { done, value } = await retryReader.read();
-                        if (done) break;
-                        if (value) {
-                            retryChunks.push(value);
-                            retryLoaded += value.length;
-                            if (retryTotal > 0) {
-                                setDownloadProgress(10 + Math.floor((retryLoaded / retryTotal) * 90));
-                            } else {
-                                setDownloadProgress(Math.min(95, 10 + Math.floor(retryLoaded / 1000000 * 5)));
-                            }
-                        }
-                    }
-                    return new Blob(retryChunks, { type: targetType === 'audio' ? 'audio/m4a' : 'video/mp4' });
-                }
-
-                const contentLength = response.headers.get('content-length');
-                const total = contentLength ? parseInt(contentLength, 10) : 0;
-                let loaded = 0;
-
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error("Stream not supported");
-
-                const chunks: BlobPart[] = [];
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    if (value) {
-                        chunks.push(value);
-                        loaded += value.length;
-                        if (total > 0) {
-                            setDownloadProgress(10 + Math.floor((loaded / total) * 90));
-                        } else {
-                            setDownloadProgress(Math.min(95, 10 + Math.floor(loaded / 1000000 * 5)));
-                        }
-                    }
-                }
-
-                return new Blob(chunks, { type: targetType === 'audio' ? 'audio/m4a' : 'video/mp4' });
-            };
-
-            const triggerDownload = (blob: Blob, title: string, type: 'audio' | 'video') => {
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `${title.replace(/[^\w\s-]/g, '')}.${type === 'audio' ? 'm4a' : 'mp4'}`;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setTimeout(() => URL.revokeObjectURL(url), 60000);
-            };
-
-            if (type === 'both') {
-                // Sequential download to avoid overwhelming
-                const audioBlob = await attemptDownload('audio');
-                triggerDownload(audioBlob, track.title, 'audio');
-
-                // Small delay
-                await new Promise(r => setTimeout(r, 1000));
-
-                const videoBlob = await attemptDownload('video');
-                triggerDownload(videoBlob, track.title, 'video');
-            } else {
-                const blob = await attemptDownload(type);
-                triggerDownload(blob, track.title, type);
-            }
-
-            console.log('Download sequence complete.');
-            setDownloadProgress(100);
-
-        } catch (err: any) {
-            console.error("Download error:", err);
-
-            // 4. Final Fallback: Cobalt.tools redirect
-            const cobaltUrl = `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${track.id}`)}`;
-            if (confirm(`Download failed. Would you like to open cobalt.tools to download this track directly?\n\nThis will open in a new tab.`)) {
-                window.open(cobaltUrl, '_blank');
-            }
-        } finally {
-            setDownloadingId(null);
-            setDownloadProgress(0);
+        if (type === 'audio') {
+            window.open(`https://cobalt.tools/?url=${ytUrl}&downloadMode=audio`, '_blank');
+        } else if (type === 'video') {
+            window.open(`https://cobalt.tools/?url=${ytUrl}`, '_blank');
+        } else {
+            // Both: open audio first, then video after a short delay
+            window.open(`https://cobalt.tools/?url=${ytUrl}&downloadMode=audio`, '_blank');
+            setTimeout(() => {
+                window.open(`https://cobalt.tools/?url=${ytUrl}`, '_blank');
+            }, 500);
         }
     };
 
@@ -290,60 +132,51 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                     </div>
 
                     <div className="flex items-center gap-x-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0 pr-2">
-                        {downloadingId === song.id ? (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-green-600/20 rounded-full border border-green-500/20">
-                                <Loader2 size={16} className="animate-spin text-green-400" />
-                                <span className="text-xs text-green-400 font-bold">{downloadProgress}%</span>
+                        <button
+                            onClick={() => handlePlay(song, 'audio')}
+                            className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10"
+                            title="Play Audio"
+                        >
+                            <Music size={18} strokeWidth={2.5} />
+                        </button>
+                        <button
+                            onClick={() => handlePlay(song, 'video')}
+                            className="p-3 pulsar-bg hover:scale-105 rounded-full text-white transition-all shadow-lg shadow-purple-500/20"
+                            title="Play Video"
+                        >
+                            <Video size={18} strokeWidth={2.5} />
+                        </button>
+                        <div className="relative group/download">
+                            <button
+                                className="p-3 bg-green-600/20 hover:bg-green-600/30 rounded-full text-green-400 transition-all border border-green-500/20"
+                                title="Download"
+                            >
+                                <Download size={18} strokeWidth={2.5} />
+                            </button>
+                            <div className="absolute right-0 bottom-full mb-2 bg-neutral-900 border border-white/10 rounded-xl p-1 shadow-2xl min-w-[130px] opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
+                                <button
+                                    onClick={() => handleDownload(song, 'audio')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
+                                >
+                                    <Music size={14} />
+                                    Audio
+                                </button>
+                                <button
+                                    onClick={() => handleDownload(song, 'video')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
+                                >
+                                    <Video size={14} />
+                                    Video
+                                </button>
+                                <button
+                                    onClick={() => handleDownload(song, 'both')}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-green-400 font-bold whitespace-nowrap"
+                                >
+                                    <Download size={14} />
+                                    Both
+                                </button>
                             </div>
-                        ) : (
-                            <>
-                                <button
-                                    onClick={() => handlePlay(song, 'audio')}
-                                    className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10"
-                                    title="Play Audio"
-                                >
-                                    <Music size={18} strokeWidth={2.5} />
-                                </button>
-                                <button
-                                    onClick={() => handlePlay(song, 'video')}
-                                    className="p-3 pulsar-bg hover:scale-105 rounded-full text-white transition-all shadow-lg shadow-purple-500/20"
-                                    title="Play Video"
-                                >
-                                    <Video size={18} strokeWidth={2.5} />
-                                </button>
-                                <div className="relative group/download">
-                                    <button
-                                        className="p-3 bg-green-600/20 hover:bg-green-600/30 rounded-full text-green-400 transition-all border border-green-500/20"
-                                        title="Download"
-                                    >
-                                        <Download size={18} strokeWidth={2.5} />
-                                    </button>
-                                    <div className="absolute right-0 bottom-full mb-2 bg-neutral-900 border border-white/10 rounded-xl p-1 shadow-2xl min-w-[130px] opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
-                                        <button
-                                            onClick={() => handleDownload(song, 'audio')}
-                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
-                                        >
-                                            <Music size={14} />
-                                            Audio
-                                        </button>
-                                        <button
-                                            onClick={() => handleDownload(song, 'video')}
-                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
-                                        >
-                                            <Video size={14} />
-                                            Video
-                                        </button>
-                                        <button
-                                            onClick={() => handleDownload(song, 'both')}
-                                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-green-400 font-bold whitespace-nowrap"
-                                        >
-                                            <Download size={14} />
-                                            Both
-                                        </button>
-                                    </div>
-                                </div>
-                            </>
-                        )}
+                        </div>
                     </div>
                 </div>
             ))}
