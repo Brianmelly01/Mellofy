@@ -379,7 +379,9 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    if (pipe) {
+    const shouldProbe = pipe || getUrl;
+
+    if (shouldProbe) {
         if (!videoId && !directUrl) return NextResponse.json({ error: "Missing ID for piping" }, { status: 400 });
         try {
             console.log(`Pulsar-Core Bridging: ${videoId || 'Direct'} (${type}) [SkipProbe: ${skipProbe}, DirectURL: ${!!directUrl}]`);
