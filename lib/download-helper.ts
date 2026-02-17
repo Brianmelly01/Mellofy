@@ -14,14 +14,19 @@ export const INVIDIOUS_NODES = [
 
 export const COBALT_NODES = [
     "https://api.cobalt.tools",
-    "https://cobalt.meowing.de", // Often supports API at root
+    "https://cobalt.meowing.de",
     "https://co.eepy.moe",
     "https://cobalt-api.v06.me",
     "https://api.cobalt.kwiatekmiki.pl",
     "https://cobalt.154.53.53.53.sslip.io",
     "https://cobalt.q69.it",
-    "https://cobaltt.tools", // Often supports API at root
+    "https://cobaltt.tools",
     "https://lc.vern.cc",
+    "https://cobalt.xy24.eu.org",
+    "https://cobalt.kinuseka.net",
+    "https://co.wuk.sh",
+    "https://cobalt.exozy.me",
+    "https://cobalt.majhcc.xyz",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
@@ -39,35 +44,55 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
-        try {
-            // Cobalt API v10+: POST / with JSON headers
-            // Request DIRECTLY from browser to bypass Vercel IP blocking.
-            const payload = {
-                url: `https://youtube.com/watch?v=${videoId}`,
-                downloadMode: type === 'audio' ? 'audio' : 'auto',
-                videoQuality: '720',
-                youtubeVideoCodec: 'h264',
-                alwaysProxy: false,
-            };
+        // Helper to try a specific endpoint
+        const tryEndpoint = async (endpoint: string, isV10: boolean) => {
+            try {
+                const payload = isV10 ? {
+                    url: `https://youtube.com/watch?v=${videoId}`,
+                    downloadMode: type === 'audio' ? 'audio' : 'auto',
+                    videoQuality: '720',
+                    youtubeVideoCodec: 'h264',
+                    alwaysProxy: false,
+                } : {
+                    url: `https://youtube.com/watch?v=${videoId}`,
+                    vCodec: 'h264',
+                    vQuality: '720',
+                    isAudioOnly: type === 'audio',
+                };
 
-            const res = await fetchWithTimeout(instance, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body: JSON.stringify(payload)
-            }, 8000).catch(() => null);
+                const res = await fetchWithTimeout(endpoint, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                    referrerPolicy: "no-referrer",
+                    credentials: "omit",
+                    mode: "cors",
+                }, 5000).catch(() => null);
 
-            if (res && res.ok) {
-                const d = await res.json();
-                if (d.status === 'error' || d.status === 'picker') return null;
-                return d.url || null;
-            }
-        } catch (e) {
-            // console.warn(`Cobalt probe failed for ${instance}:`, e);
+                if (res && res.ok) {
+                    const d = await res.json();
+                    if (d.status === 'error' || d.status === 'picker') return null;
+                    return d.url || d.picker?.[0]?.url || null;
+                }
+            } catch (e) { }
+            return null; // Failed this endpoint
+        };
+
+        // Try v10 (root) first, then v7 (/api/json)
+        let url = await tryEndpoint(instance, true);
+        if (url) return url;
+
+        // Some instances use /api/json (v7) or just mount v10 there
+        // Only try if the instance URL doesn't already end in /api/json
+        if (!instance.includes('/api/json')) {
+            const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
+            url = await tryEndpoint(v7Url, false);
         }
-        return null;
+
+        return url;
     };
 
     // V5 Strategy: Direct Cobalt Swarm
