@@ -382,22 +382,35 @@ export async function GET(request: NextRequest) {
 
             // === PHASE 0: Direct URL Proxy (fastest - reuses already-discovered URL) ===
             if (directUrl) {
-                console.log("Pulsar: Direct URL proxy mode");
+                console.log("Pulsar: Direct URL proxy mode for:", directUrl.substring(0, 50) + "...");
+
+                // Only send YouTube headers if it's a Google Video link
+                const isGoogle = directUrl.includes("googlevideo.com");
+                const headers = isGoogle
+                    ? { ...GET_PULSAR_HEADERS(true, incomingUA), "Range": "bytes=0-", "Connection": "keep-alive" }
+                    : {
+                        "User-Agent": incomingUA || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "*/*",
+                        "Range": "bytes=0-",
+                        "Connection": "keep-alive"
+                    };
+
                 const streamResponse = await fetch(directUrl, {
-                    headers: { ...GET_PULSAR_HEADERS(true, incomingUA), "Range": "bytes=0-", "Connection": "keep-alive" },
+                    headers,
                     signal: AbortSignal.timeout(30000)
                 });
+
                 if (streamResponse.ok) {
-                    const headers = new Headers();
-                    headers.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
-                    headers.set("Content-Disposition", `attachment; filename="download.${type === "audio" ? "m4a" : "mp4"}"`);
-                    if (streamResponse.headers.get("Content-Length")) headers.set("Content-Length", streamResponse.headers.get("Content-Length")!);
-                    headers.set("Accept-Ranges", "bytes");
-                    headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-                    headers.set("X-Pulsar-Core", "direct");
-                    return new NextResponse(streamResponse.body, { headers });
+                    const finalHeaders = new Headers();
+                    finalHeaders.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
+                    finalHeaders.set("Content-Disposition", `attachment; filename="download.${type === "audio" ? "m4a" : "mp4"}"`);
+                    if (streamResponse.headers.get("Content-Length")) finalHeaders.set("Content-Length", streamResponse.headers.get("Content-Length")!);
+                    finalHeaders.set("Accept-Ranges", "bytes");
+                    finalHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+                    finalHeaders.set("X-Pulsar-Core", "direct");
+                    return new NextResponse(streamResponse.body, { headers: finalHeaders });
                 }
-                console.warn("Pulsar: Direct URL proxy failed, continuing with discovery...");
+                console.warn(`Pulsar: Direct URL proxy failed (${streamResponse.status}), continuing with discovery...`);
             }
 
             let result: { url: string; title: string } | null = null;
