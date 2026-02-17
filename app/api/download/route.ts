@@ -314,7 +314,7 @@ export async function GET(request: NextRequest) {
     const skipProbe = searchParams.get("skip_probe") === "true";
     const directUrl = searchParams.get("direct_url");
 
-    if (!videoId) return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
+    if (!videoId && !action && !directUrl) return NextResponse.json({ error: "Missing video ID or Action" }, { status: 400 });
 
     const incomingUA = request.headers.get("X-Pulsar-Agent") || undefined;
 
@@ -380,8 +380,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (pipe) {
+        if (!videoId && !directUrl) return NextResponse.json({ error: "Missing ID for piping" }, { status: 400 });
         try {
-            console.log(`Pulsar-Core Bridging: ${videoId} (${type}) [SkipProbe: ${skipProbe}, DirectURL: ${!!directUrl}]`);
+            console.log(`Pulsar-Core Bridging: ${videoId || 'Direct'} (${type}) [SkipProbe: ${skipProbe}, DirectURL: ${!!directUrl}]`);
 
             // === PHASE 0: Direct URL Proxy (fastest - reuses already-discovered URL) ===
             if (directUrl) {
@@ -429,9 +430,9 @@ export async function GET(request: NextRequest) {
                     const batch = fullFleet.slice(i, i + batchSize);
                     const results = await Promise.all(batch.map(instance => {
                         const t = type === "audio" ? "audio" : "video";
-                        if (instance.includes("cobalt")) return tryCobalt(instance, videoId, t, true, incomingUA);
-                        if (instance.includes("piped")) return tryPiped(instance, videoId, t, true, incomingUA);
-                        return tryInvidious(instance, videoId, t, true, incomingUA);
+                        if (instance.includes("cobalt")) return tryCobalt(instance, videoId || "", t, true, incomingUA);
+                        if (instance.includes("piped")) return tryPiped(instance, videoId || "", t, true, incomingUA);
+                        return tryInvidious(instance, videoId || "", t, true, incomingUA);
                     }));
                     const found = results.find(res => res !== null);
                     if (found) { result = found; break; }
@@ -440,7 +441,7 @@ export async function GET(request: NextRequest) {
 
             // === PHASE 1.5: Local Proton Core (YTDL Native Fallback) ===
             // If the fleet failed, use the server's own IP to resolve the video
-            if (!result) {
+            if (!result && videoId) {
                 try {
                     console.log("Pulsar: Fleet failed, engaging Proton Core (YTDL)...");
                     // ytdl is already imported at the top
