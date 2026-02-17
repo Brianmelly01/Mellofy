@@ -59,6 +59,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         setDownloadingId(track.id);
         setDownloadProgress(0);
 
+        let lastDirectUrl: string | null = null;
+
         try {
             console.log(`Initiating download for ${track.title} (${type})...`);
 
@@ -72,6 +74,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 // 1. Client-Side Probe
                 const directUrl = await clientSideProbe(track.id, targetType);
                 console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
+
+                if (directUrl) lastDirectUrl = directUrl;
 
                 // 2. Try Direct Client-Side Fetch (Best for performance + no server load)
                 if (directUrl) {
@@ -159,6 +163,12 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             // 4. Final Fallback: Window.open (Redirection)
             if (confirm(`Seamless download failed. Would you like to try opening the direct link in a new tab? (Checkpoint 2)\n\nError: ${err.message}`)) {
                 try {
+                    // Check cache first
+                    if (lastDirectUrl) {
+                        window.open(lastDirectUrl, '_blank');
+                        return;
+                    }
+                    // Only re-probe if cache empty (rare)
                     const directUrl = await clientSideProbe(track.id, type === 'both' ? 'video' : type);
                     if (directUrl) {
                         window.open(directUrl, '_blank');
