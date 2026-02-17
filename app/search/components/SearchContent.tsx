@@ -72,7 +72,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 console.log(`Probing for ${targetType} source...`);
 
                 // 1. Client-Side Probe
-                const directUrl = await clientSideProbe(track.id, targetType);
+                let directUrl = await clientSideProbe(track.id, targetType);
+                console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
                 console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
 
                 if (directUrl) lastDirectUrl = directUrl;
@@ -90,6 +91,32 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                     } catch (e) {
                         console.warn("Direct client fetch failed (likely CORS). Falling back to proxy...", e);
                     }
+                }
+
+                // === NEW: Server-Assisted Discovery (Agent + Server Collaboration) ===
+                // If client probe failed, ask server to find a link for us (but don't proxy yet)
+                if (!directUrl) {
+                    try {
+                        console.log("Engaging Server-Assisted Discovery...");
+                        const discoveryUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&get_url=true`;
+                        const discRes = await fetch(discoveryUrl);
+                        if (discRes.ok) {
+                            const discData = await discRes.json();
+                            if (discData.url) {
+                                console.log("Server found a direct link!", discData.url);
+                                directUrl = discData.url;
+                                lastDirectUrl = discData.url; // Cache it!
+
+                                // Try fetching this server-discovered link directly
+                                try {
+                                    const response = await fetch(discData.url);
+                                    if (response.ok) {
+                                        return await response.blob();
+                                    }
+                                } catch (e) { console.warn("Server-discovered link failed CORS fetch, falling back to proxy."); }
+                            }
+                        }
+                    } catch (e) { console.warn("Server discovery failed.", e); }
                 }
 
                 // 3. Fallback to API Proxy

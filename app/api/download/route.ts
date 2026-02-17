@@ -308,6 +308,7 @@ export async function GET(request: NextRequest) {
     const discoveryMode = action === "discovery";
     const force = searchParams.get("force") === "true" || discoveryMode; // Auto-Force for discovery
     const pipe = searchParams.get("pipe") === "true";
+    const getUrl = searchParams.get("get_url") === "true";
     const skipProbe = searchParams.get("skip_probe") === "true";
     const directUrl = searchParams.get("direct_url");
 
@@ -433,6 +434,16 @@ export async function GET(request: NextRequest) {
                     const found = results.find(res => res !== null);
                     if (found) { result = found; break; }
                 }
+            }
+
+            // === NEW: Server-Assisted Discovery Mode ===
+            // Return the URL to the client instead of proxying
+            if (getUrl && result?.url) {
+                return NextResponse.json({
+                    url: result.url,
+                    title: result.title || "download",
+                    filename: `${(result.title || "download").replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}`
+                });
             }
 
             // === PHASE 2: Try streaming the Fleet result ===
