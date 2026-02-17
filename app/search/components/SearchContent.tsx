@@ -51,20 +51,22 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         const downloadOne = async (targetType: 'audio' | 'video') => {
             setDownloadingId(track.id);
             setDownloadProgress(0);
+            let debugLogs: string[] = [];
 
             try {
                 // Phase 1: Client-Side Probe
                 console.log(`Phase 1: Probing client-side for ${targetType}...`);
                 setDownloadProgress(10);
-                let directUrl = await clientSideProbe(track.id, targetType);
+
+                const probeResult = await clientSideProbe(track.id, targetType);
+                const directUrl = probeResult.url;
+                debugLogs = probeResult.logs;
 
                 // Phase 2: Direct Native Download (Most Reliable)
                 if (directUrl) {
                     console.log("Phase 2: Triggering native browser download...", directUrl);
                     setDownloadProgress(100);
 
-                    // Create invisible link and click it
-                    // This bypasses CORS (browser handles opaque response) and Server IP blocks
                     const link = document.createElement('a');
                     link.href = directUrl;
                     link.download = `${track.title}.${targetType === 'audio' ? 'mp3' : 'mp4'}`;
@@ -80,13 +82,13 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 }
 
                 // Phase 3: Server Extraction Fallback
-                console.log("Phase 3: Client probe failed, engaging Server Extraction...");
+                console.log("Phase 3: Client probe failed, engaging Server Extraction...", debugLogs);
                 setDownloadProgress(20);
 
                 let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
 
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`Server error (${response.status})`);
+                if (!response.ok) throw new Error(`Server extraction failed (${response.status})`);
 
                 const reader = response.body?.getReader();
                 if (!reader) throw new Error("Stream not available");
@@ -122,7 +124,10 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 setTimeout(() => URL.revokeObjectURL(url), 60000);
                 setDownloadProgress(100);
 
-            } catch (err) {
+            } catch (err: any) {
+                // Attach debug logs to the error so user can see what happened
+                const logDump = debugLogs.length > 0 ? `\n\nDEBUG LOGS:\n${debugLogs.slice(0, 5).join('\n')}\n(and ${Math.max(0, debugLogs.length - 5)} more)` : '';
+                err.message = `${err.message} ${logDump}`;
                 throw err;
             }
         };

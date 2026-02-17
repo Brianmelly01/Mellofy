@@ -29,7 +29,10 @@ export const COBALT_NODES = [
     "https://cobalt.majhcc.xyz",
 ];
 
-export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
+export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
+    const logs: string[] = [];
+    const log = (msg: string) => logs.push(`[${new Date().toISOString().split('T')[1].slice(0, 8)}] ${msg}`);
+
     const fetchWithTimeout = async (url: string, options: any, timeout = 6000) => {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
@@ -44,7 +47,6 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
-        // Helper to try a specific endpoint
         const tryEndpoint = async (endpoint: string, isV10: boolean) => {
             try {
                 const payload = isV10 ? {
@@ -70,49 +72,59 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     referrerPolicy: "no-referrer",
                     credentials: "omit",
                     mode: "cors",
-                }, 5000).catch(() => null);
+                }, 5000); // Removed catch here to capture error in outer block
 
-                if (res && res.ok) {
+                if (res.ok) {
                     const d = await res.json();
-                    if (d.status === 'error' || d.status === 'picker') return null;
-                    return d.url || d.picker?.[0]?.url || null;
+                    if (d.status === 'error' || d.status === 'picker') {
+                        log(`${instance} (${isV10 ? 'v10' : 'v7'}) returned status: ${d.status}`);
+                        return null;
+                    }
+                    if (d.url || d.picker?.[0]?.url) {
+                        log(`${instance} (${isV10 ? 'v10' : 'v7'}) SUCCESS`);
+                        return d.url || d.picker?.[0]?.url;
+                    }
+                } else {
+                    log(`${instance} (${isV10 ? 'v10' : 'v7'}) HTTP ${res.status}`);
                 }
-            } catch (e) { }
-            return null; // Failed this endpoint
+            } catch (e: any) {
+                log(`${instance} (${isV10 ? 'v10' : 'v7'}) Failed: ${e.message || 'Network/CORS'}`);
+            }
+            return null;
         };
 
-        // Try v10 (root) first, then v7 (/api/json)
-        let url = await tryEndpoint(instance, true);
+        const url = await tryEndpoint(instance, true);
         if (url) return url;
 
-        // Some instances use /api/json (v7) or just mount v10 there
-        // Only try if the instance URL doesn't already end in /api/json
         if (!instance.includes('/api/json')) {
             const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
-            url = await tryEndpoint(v7Url, false);
+            const v7Result = await tryEndpoint(v7Url, false);
+            if (v7Result) return v7Result;
         }
 
-        return url;
+        return null;
     };
 
     // V5 Strategy: Direct Cobalt Swarm
     // We only use Cobalt because it reliably supports CORS for client-side use.
     try {
-        console.log(`Phase 1: Launching Cobalt swarm for ${videoId}...`);
+        log(`Starting swarm for ${videoId}`);
 
         // Randomize order to spread load
         const nodes = [...COBALT_NODES].sort(() => Math.random() - 0.5);
 
-        const batchSize = 6; // Parallelize 6 at a time
+        const batchSize = 5;
         for (let i = 0; i < nodes.length; i += batchSize) {
             const batch = nodes.slice(i, i + batchSize);
+            log(`Batch ${i / batchSize + 1}: Probing ${batch.join(', ')}`);
+
             const results = await Promise.all(batch.map(url => probeCobalt(url)));
             const valid = results.find(url => url !== null);
-            if (valid) return valid;
+            if (valid) return { url: valid, logs };
         }
-    } catch (globalErr) {
-        console.error("Client probe failure:", globalErr);
+    } catch (globalErr: any) {
+        log(`Fatal error: ${globalErr.message}`);
     }
 
-    return null;
+    return { url: null, logs };
 };
