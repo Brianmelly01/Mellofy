@@ -4,6 +4,7 @@ import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { Play, Video, Music, Loader2, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import { clientSideProbe } from "@/lib/download-helper";
 
 interface SearchContentProps {
     term?: string;
