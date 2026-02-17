@@ -60,65 +60,102 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         setDownloadProgress(0);
 
         try {
-            console.log(`Starting download for ${track.title} (${type})...`);
+            console.log(`Initiating download for ${track.title} (${type})...`);
 
-            const response = await fetch(`/api/download?id=${track.id}&type=${type}&pipe=true`, {
-                method: 'GET',
-                headers: {
-                    'Accept': type === 'audio' ? 'audio/m4a' : 'video/mp4',
+            // 1. Probe for a direct URL using the robust fleet system
+            // This avoids CORS issues and uses multiple fallback strategies
+
+            const attemptDownload = async (targetType: 'audio' | 'video') => {
+                setDownloadProgress(5); // Started probing
+                console.log(`Probing for ${targetType} source...`);
+
+                // Try to get a direct URL via client-side probing
+                const directUrl = await clientSideProbe(track.id, targetType);
+                console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
+
+                // Construct the API URL. 
+                // If we found a direct URL, we pass it to the API to proxy (avoiding CORS).
+                // If not, we still call the API to let it try its own server-side extraction.
+                let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true`;
+                if (directUrl) {
+                    apiUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
                 }
-            });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Download API error:', errorText);
-                throw new Error(`Download failed (${response.status})`);
-            }
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`Download failed: ${response.status}`);
 
-            const contentLength = response.headers.get('content-length');
-            const total = contentLength ? parseInt(contentLength, 10) : 0;
-            let loaded = 0;
+                const contentLength = response.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength, 10) : 0;
+                let loaded = 0;
 
-            const reader = response.body?.getReader();
-            if (!reader) throw new Error("Stream not supported");
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error("Stream not supported");
 
-            const chunks: BlobPart[] = [];
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value) {
-                    chunks.push(value);
-                    loaded += value.length;
-                    if (total > 0) {
-                        setDownloadProgress(Math.floor((loaded / total) * 100));
-                    } else {
-                        // Show indeterminate progress
-                        setDownloadProgress(Math.min(99, Math.floor(loaded / 1000000 * 10)));
+                const chunks: BlobPart[] = [];
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    if (value) {
+                        chunks.push(value);
+                        loaded += value.length;
+                        if (total > 0) {
+                            // Map progress to 10-100% range (0-10 was probing)
+                            setDownloadProgress(10 + Math.floor((loaded / total) * 90));
+                        } else {
+                            // Indeterminate
+                            setDownloadProgress(Math.min(95, 10 + Math.floor(loaded / 1000000 * 5)));
+                        }
                     }
                 }
+
+                return new Blob(chunks, { type: targetType === 'audio' ? 'audio/m4a' : 'video/mp4' });
+            };
+
+            const triggerDownload = (blob: Blob, title: string, type: 'audio' | 'video') => {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${title.replace(/[^\w\s-]/g, '')}.${type === 'audio' ? 'm4a' : 'mp4'}`;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+            };
+
+            if (type === 'both') {
+                // Sequential download to avoid overwhelming
+                const audioBlob = await attemptDownload('audio');
+                triggerDownload(audioBlob, track.title, 'audio');
+
+                // Small delay
+                await new Promise(r => setTimeout(r, 1000));
+
+                const videoBlob = await attemptDownload('video');
+                triggerDownload(videoBlob, track.title, 'video');
+            } else {
+                const blob = await attemptDownload(type);
+                triggerDownload(blob, track.title, type);
             }
 
-            console.log(`Download complete! Size: ${loaded} bytes. Creating blob...`);
-            const blob = new Blob(chunks, {
-                type: type === 'audio' ? 'audio/m4a' : 'video/mp4'
-            });
-            const url = URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${track.title.replace(/[^\w\s-]/g, '')}.${type === 'audio' ? 'm4a' : 'mp4'}`;
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            console.log('Download triggered successfully!');
-            setTimeout(() => URL.revokeObjectURL(url), 60000);
+            console.log('Download sequence complete.');
+            setDownloadProgress(100);
 
         } catch (err: any) {
             console.error("Download error:", err);
-            // Show user-friendly error
-            alert(`Download failed: ${err.message || 'Unknown error'}. The video might be restricted or unavailable. Please try another track.`);
+
+            // Client-side fallback: Try to download directly if proxy failed
+            if (confirm(`Download failed via Checkpoint 1. Would you like to try the direct link (Checkpoint 2)?\n\nError: ${err.message}`)) {
+                try {
+                    const directUrl = await clientSideProbe(track.id, type === 'both' ? 'video' : type);
+                    if (directUrl) {
+                        window.open(directUrl, '_blank');
+                        return;
+                    }
+                } catch (e) { }
+            }
+
+            alert(`Download failed: ${err.message || 'Unknown error'}. The video might be restricted.`);
         } finally {
             setDownloadingId(null);
             setDownloadProgress(0);
