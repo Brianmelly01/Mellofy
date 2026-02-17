@@ -59,10 +59,19 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         setDownloadProgress(0);
 
         try {
-            const response = await fetch(`/api/download?id=${track.id}&type=${type}&pipe=true`);
+            console.log(`Starting download for ${track.title} (${type})...`);
+
+            const response = await fetch(`/api/download?id=${track.id}&type=${type}&pipe=true`, {
+                method: 'GET',
+                headers: {
+                    'Accept': type === 'audio' ? 'audio/m4a' : 'video/mp4',
+                }
+            });
 
             if (!response.ok) {
-                throw new Error("Download failed");
+                const errorText = await response.text();
+                console.error('Download API error:', errorText);
+                throw new Error(`Download failed (${response.status})`);
             }
 
             const contentLength = response.headers.get('content-length');
@@ -81,10 +90,14 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                     loaded += value.length;
                     if (total > 0) {
                         setDownloadProgress(Math.floor((loaded / total) * 100));
+                    } else {
+                        // Show indeterminate progress
+                        setDownloadProgress(Math.min(99, Math.floor(loaded / 1000000 * 10)));
                     }
                 }
             }
 
+            console.log(`Download complete! Size: ${loaded} bytes. Creating blob...`);
             const blob = new Blob(chunks, {
                 type: type === 'audio' ? 'audio/m4a' : 'video/mp4'
             });
@@ -93,15 +106,18 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             const link = document.createElement('a');
             link.href = url;
             link.download = `${track.title.replace(/[^\w\s-]/g, '')}.${type === 'audio' ? 'm4a' : 'mp4'}`;
+            link.style.display = 'none';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
+            console.log('Download triggered successfully!');
             setTimeout(() => URL.revokeObjectURL(url), 60000);
-        } catch (err) {
+
+        } catch (err: any) {
             console.error("Download error:", err);
-            // Fallback to direct link
-            window.open(`/api/download?id=${track.id}&type=${type}&pipe=true`, '_blank');
+            // Show user-friendly error
+            alert(`Download failed: ${err.message || 'Unknown error'}. The video might be restricted or unavailable. Please try another track.`);
         } finally {
             setDownloadingId(null);
             setDownloadProgress(0);
