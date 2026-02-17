@@ -27,6 +27,7 @@ import {
 import { usePlayerStore } from "@/lib/store/usePlayerStore"; // Keeping usePlayerStore as per original, assuming usePlayer is a typo in instructions
 import { cn } from "@/lib/utils";
 import PlayerContent from "./PlayerContent";
+import { motion } from "framer-motion";
 
 interface AcquisitionResults {
     audio: { url: string; filename: string } | null;
@@ -36,7 +37,7 @@ interface AcquisitionResults {
 
 const Player = () => {
     const {
-        currentTrack,
+        currentTrack: storeTrack,
         isPlaying,
         togglePlay,
         volume,
@@ -55,10 +56,10 @@ const Player = () => {
 
     // Acquisition Hub States
     const [isHubOpen, setIsHubOpen] = useState(false);
-    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'obliterating' | 'tunneling'>('probing');
-    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite' | 'verifying' | 'done'>('ytdl');
+    const [hubStatus, setHubStatus] = useState<'probing' | 'ready' | 'fallback' | 'tunneling' | 'scanning'>('probing');
+    const [statusMessage, setStatusMessage] = useState<string>("");
+    const [extractionLayer, setExtractionLayer] = useState<'ytdl' | 'verifying' | 'mirror'>('ytdl');
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
-    const [handshakeProgress, setHandshakeProgress] = useState<number>(0);
     const [hubResults, setHubResults] = useState<AcquisitionResults>({ audio: null, video: null, fallbackUrl: null });
 
     // Close download menu when clicking outside
@@ -111,97 +112,254 @@ const Player = () => {
         }
     };
 
-    const handleDownload = async (type: 'audio' | 'video' | 'both', isForce: boolean = false) => {
+    const handleDownload = async (type: 'audio' | 'video' | 'both') => {
         if (!currentTrack) return;
 
         setIsHubOpen(true);
-        setHubStatus(isForce ? 'obliterating' : 'probing');
-        setExtractionLayer(isForce ? 'mobile_elite' : 'ytdl');
+        setHubStatus('scanning');
         setHubResults({ audio: null, video: null, fallbackUrl: null });
         setShowDownloadMenu(false);
 
-        // Simulation cycle for granular UX progress
-        const layers: ('ytdl' | 'cobalt' | 'shotgun' | 'mobile_elite')[] = isForce
-            ? ['mobile_elite', 'shotgun', 'cobalt']
-            : ['ytdl', 'cobalt', 'shotgun'];
-
-        let currentLayerIndex = 0;
-        const layerInterval = setInterval(() => {
-            if (currentLayerIndex < layers.length - 1) {
-                currentLayerIndex++;
-                setExtractionLayer(layers[currentLayerIndex]);
-            }
-        }, isForce ? 1000 : 1500);
-
         try {
-            const response = await fetch(`/api/download?id=${currentTrack.id}&type=both${isForce ? '&force=true' : ''}`);
-            const data = await response.json();
+            console.log("Omnipresence Phase 12: Engaging User-IP Spear discovery...");
+            setStatusMessage("Quantum Search Engaged (User-IP Spear)...");
 
-            clearInterval(layerInterval);
-            setExtractionLayer('verifying');
+            // 1. Client-Side Probe (Primary - Uses Browser IP)
+            const [audioUrl, videoUrl] = await Promise.all([
+                (type === 'audio' || type === 'both') ? clientSideProbe(currentTrack.id, 'audio') : Promise.resolve(null),
+                (type === 'video' || type === 'both') ? clientSideProbe(currentTrack.id, 'video') : Promise.resolve(null)
+            ]);
 
-            setHubResults({
-                audio: data.audio,
-                video: data.video,
-                fallbackUrl: data.fallbackUrl
-            });
-
-            if (data.status === 'ready') {
-                // V19 Failure-Reflex: Test accessibility before initiating
-                let audioOk = data.audio ? await testUrlAccessibility(data.audio.url) : true;
-                let videoOk = data.video ? await testUrlAccessibility(data.video.url) : true;
-
-                if (!audioOk || !videoOk) {
-                    console.log("Hyper-Tunnel: Critical IP-Lock detected. Initiating Pulsar-Core escalation.");
-                    setHubStatus('obliterating');
-                    setExtractionLayer('mobile_elite');
-                    setHandshakeProgress(0);
-
-                    // Quasar-Shift: Simulated handshake progress for 1.5s delay
-                    const interval = setInterval(() => {
-                        setHandshakeProgress(prev => {
-                            if (prev >= 95) {
-                                clearInterval(interval);
-                                return 100;
-                            }
-                            return prev + 5;
-                        });
-                    }, 75);
-
-                    setTimeout(() => {
-                        clearInterval(interval);
-                        handleGhostProtocol(type === 'both' ? 'audio' : type);
-                    }, 1500);
-                } else {
-                    setHubStatus('ready');
-                    if (type === 'audio' && data.audio) triggerLink(data.audio.url, data.audio.filename);
-                    if (type === 'video' && data.video) triggerLink(data.video.url, data.video.filename);
-                    if (type === 'both') {
-                        if (data.audio) triggerLink(data.audio.url, data.audio.filename);
-                        if (data.video) setTimeout(() => triggerLink(data.video.url, data.video.filename), 1000);
-                    }
-                }
-            } else if (data.ghostProtocolEnabled) {
-                setHubStatus('tunneling');
+            if (audioUrl || videoUrl) {
+                console.log("Omnipresence: Link found by browser! Triggering Warp Tunnel...");
+                handleGhostProtocol(type, {
+                    audioUrl: audioUrl || null,
+                    videoUrl: videoUrl || null
+                });
             } else {
-                setHubStatus('fallback');
+                // 2. Server-Side Fallback (Secondary - Uses Deep Shotgun)
+                console.log("Omnipresence: Browser IP exhausted. Falling back to Server Gun...");
+                const response = await fetch(`/api/download?id=${currentTrack.id}&type=${type}&action=discovery`, { signal: AbortSignal.timeout(30000) });
+                const data = await response.json();
+
+                if (data.status === 'found') {
+                    handleGhostProtocol(type, {
+                        audioUrl: data.audio || null,
+                        videoUrl: data.video || null
+                    });
+                } else {
+                    handleGhostProtocol(type);
+                }
             }
         } catch (err) {
-            clearInterval(layerInterval);
-            setHubStatus('fallback');
-            setHubResults(prev => ({ ...prev, fallbackUrl: `https://cobalt.canine.tools/?q=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}` }));
+            console.error("Omnipresence: Discovery system failure, fallback to emergency tunnel.", err);
+            handleGhostProtocol(type);
         }
     };
 
-    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both', skipProbe: boolean = false) => {
+    // V4 ULTIMATE PROBE CONSTANTS
+    const PIPED_NODES = [
+        "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
+        "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
+        "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
+        "https://api.piped.projectsegfault.lt", "https://piped-api.loli.net", "https://pipedapi.moemoe.me"
+    ];
+
+    const INVIDIOUS_NODES = [
+        "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
+        "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
+        "https://invidious.lunar.icu", "https://iv.nautile.io", "https://iv.libRedirect.eu", "https://invidious.privacydev.net",
+        "https://inv.nadeko.net", "https://yewtu.be", "https://invidious.nerdvpn.de", "https://inv.tux.pizza"
+    ];
+
+    const COBALT_NODES = [
+        "https://cobalt.tools", "https://co.wuk.sh", "https://cobalt.api.unblocker.it", "https://cobalt.q69.it",
+        "https://api.cobalt.tools", "https://cobalt-api.v06.me", "https://cobalt.sweet-pota.to", "https://cobaltt.tools",
+        "https://cobalt.canine.tools", "https://lc.vern.cc", "https://cobalt.meowing.de", "https://co.eepy.moe"
+    ];
+
+    const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
+        const fetchWithTimeout = async (url: string, options: any, timeout = 6000) => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(id);
+                return response;
+            } catch (e) {
+                clearTimeout(id);
+                throw e;
+            }
+        };
+
+        const tryAllOrigins = async (url: string) => {
+            try {
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const res = await fetchWithTimeout(proxyUrl, {}, 8000);
+                if (!res.ok) return null;
+                const data = await res.json();
+                return JSON.parse(data.contents);
+            } catch (e) { return null; }
+        };
+
+        const probePiped = async (instance: string): Promise<string | null> => {
+            try {
+                // Phase 17: Relay Shotgun (Ultra-Robust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/streams/${videoId}`)}&force=true`;
+                const res = await fetchWithTimeout(bridgeUrl, { headers: { "Accept": "application/json" } }, 12000).catch(() => null);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
+                    if (!streams || streams.length === 0) return null;
+                    const stream = streams.find((s: any) => s.quality === "720p") || streams.find((s: any) => !s.videoOnly) || streams[0];
+                    return stream?.url || null;
+                }
+            } catch (e) { }
+            return null;
+        };
+
+        const probeInvidious = async (instance: string): Promise<string | null> => {
+            try {
+                // Phase 17: Relay Shotgun (Ultra-Robust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/v1/videos/${videoId}?local=true`)}&force=true`;
+                const res = await fetchWithTimeout(bridgeUrl, {}, 12000).catch(() => null);
+                if (res && res.ok) {
+                    const data = await res.json();
+                    const formats = data.adaptiveFormats || data.formatStreams || [];
+                    const format = type === 'audio'
+                        ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
+                        : (formats.find((f: any) => f.qualityLabel?.includes("720") || f.resolution === '720p') || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
+                    return format?.url || null;
+                }
+            } catch (e) { }
+            return null;
+        };
+
+        const probeCobalt = async (instance: string): Promise<string | null> => {
+            try {
+                // Phase 17: Relay Shotgun (Ultra-Robust)
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/json`)}&force=true`;
+                const payload = {
+                    url: `https://youtube.com/watch?v=${videoId}`,
+                    downloadMode: type === 'audio' ? 'audio' : 'auto',
+                    youtubeVideoCodec: 'h264'
+                };
+                const res = await fetchWithTimeout(bridgeUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                }, 12000).catch(() => null);
+
+                if (res && res.ok) {
+                    const d = await res.json();
+                    return d.url || d.picker?.[0]?.url || null;
+                }
+            } catch (e) { }
+            return null;
+        };
+
+        const probePremium = async (): Promise<string | null> => {
+            try {
+                // Phase 19: Chronos Engine (STS Sync + Cipher Recognition)
+                const stsRes = await fetch("/api/download?action=sts").catch(() => null);
+                const { sts } = stsRes ? await stsRes.json() : { sts: "20147" };
+
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`https://www.youtube.com/youtubei/v1/player`)}&force=true`;
+                const payload = {
+                    videoId,
+                    context: {
+                        client: {
+                            clientName: 'TVHTML5',
+                            clientVersion: '7.20250224.01.00',
+                            hl: 'en',
+                            gl: 'US'
+                        }
+                    },
+                    playbackContext: {
+                        contentPlaybackContext: {
+                            signatureTimestamp: parseInt(sts)
+                        }
+                    }
+                };
+                const res = await fetchWithTimeout(bridgeUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                }, 15000).catch(() => null);
+
+                if (res && res.ok) {
+                    const data = await res.json();
+                    const formats = [...(data.streamingData?.adaptiveFormats || []), ...(data.streamingData?.formats || [])];
+                    const targetMime = type === 'audio' ? "audio/mp4" : "video/mp4";
+                    const format = formats.find((f: any) => f.mimeType?.includes(targetMime) && (type === 'audio' || f.qualityLabel === "720p")) || formats[0];
+
+                    if (format) {
+                        if (format.url) return format.url;
+                        if (format.signatureCipher || format.cipher) {
+                            // Phase 19: Relay to Decipher Bridge
+                            const c = format.signatureCipher || format.cipher;
+                            const decRes = await fetch(`/api/download?action=decipher&cipher=${encodeURIComponent(c)}`).catch(() => null);
+                            if (decRes && decRes.ok) {
+                                const decData = await decRes.json();
+                                return decData.url || null;
+                            }
+                        }
+                    }
+                }
+            } catch (e) { }
+            return null;
+        };
+
+        // V4 Strategy: Unified Ultra-Intensity Relayed Shotgun (Omega Singularity V18)
+        try {
+            console.log(`V4 Pulsar: Launching backup concurrent search for ${videoId}...`);
+            setStatusMessage("Engaging Emergency Mirror Fleet...");
+
+            const allNodes = [
+                { type: 'premium' as const, url: 'direct' },
+                ...PIPED_NODES.map(n => ({ type: 'piped' as const, url: n })),
+                ...INVIDIOUS_NODES.map(n => ({ type: 'invidious' as const, url: n })),
+                ...COBALT_NODES.map(n => ({ type: 'cobalt' as const, url: n }))
+            ].sort((a) => a.type === 'premium' ? -1 : (Math.random() - 0.5));
+
+            const batchSize = 30;
+            for (let i = 0; i < allNodes.length; i += batchSize) {
+                const batch = allNodes.slice(i, i + batchSize);
+                const results = await Promise.all(batch.map((node: any) => {
+                    if (node.type === 'premium') return probePremium();
+                    if (node.type === 'piped') return probePiped(node.url);
+                    if (node.type === 'invidious') return probeInvidious(node.url);
+                    return probeCobalt(node.url);
+                }));
+                const valid = results.find(url => url !== null);
+                if (valid) return valid;
+            }
+        } catch (globalErr) {
+            console.error("V4 Engine failure:", globalErr);
+        }
+
+        return null;
+    };
+
+    const handleGhostProtocol = async (type: 'audio' | 'video' | 'both', discoveredUrls?: { audioUrl: string | null, videoUrl: string | null }) => {
         if (!currentTrack) return;
         setHubStatus('tunneling');
         setDownloadProgress(0);
 
-        const bridgeFetch = async (t: 'audio' | 'video') => {
-            const pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true${skipProbe ? '&skip_probe=true' : ''}`;
-            const response = await fetch(pipeUrl);
-            if (!response.ok) throw new Error(`Omni-Tunnel Prime Failed for ${t}`);
+        const bridgeFetch = async (t: 'audio' | 'video', directUrl?: string | null) => {
+            // Build the pipe URL - if we have a direct URL, pass it for server-side proxying
+            let pipeUrl = `/api/download?id=${currentTrack.id}&type=${t}&pipe=true`;
+            if (directUrl) {
+                pipeUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
+            }
+            const response = await fetch(pipeUrl, {
+                headers: {
+                    'X-Pulsar-Agent': navigator.userAgent,
+                    'X-Pulsar-Origin': window.location.origin,
+                    'isNoQuery': 'true' // Phase 13 force tunnel
+                }
+            });
+            if (!response.ok) throw new Error(`Tunnel Failed for ${t} (HTTP ${response.status})`);
 
             const contentLength = response.headers.get('content-length');
             const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -217,7 +375,7 @@ const Player = () => {
                 if (value) {
                     chunks.push(value);
                     loaded += value.length;
-                    if (total > 0 && type !== 'both') {
+                    if (total > 0 && (type !== 'both' || t === 'video')) {
                         setDownloadProgress(Math.floor((loaded / total) * 100));
                     }
                 }
@@ -227,178 +385,154 @@ const Player = () => {
             return URL.createObjectURL(blob);
         };
 
+        // Attempt strategy: 
+        // 1st: Use server tunnel with direct URL (if available)
+        // 2nd: Use server tunnel with YTDL/Fleet (server-side)
+        // 3rd: Client-side probe (bypass Vercel)
+        const attemptDownload = async (t: 'audio' | 'video') => {
+            const directUrl = t === 'audio' ? discoveredUrls?.audioUrl : discoveredUrls?.videoUrl;
+
+            // Attempt 1 & 2: Server Tunnel (proxies the download)
+            try {
+                return await bridgeFetch(t, directUrl);
+            } catch (e) {
+                console.warn(`Server tunnel failed for ${t}, switching to Client-Side Fallback...`, e);
+            }
+
+            // Attempt 3: Client-Side Fallback (Deep Pulse Recovery)
+            try {
+                console.log(`Engaging Deep Pulse Discovery for ${t}...`);
+                setHubStatus('scanning');
+                const clientUrl = await clientSideProbe(currentTrack.id, t);
+                if (clientUrl) {
+                    console.log(`Client-Side success! URL: ${clientUrl}`);
+                    // Simply return the direct URL? No, we need a Blob URL for consistency if possible, 
+                    // BUT triggerLink handles direct URLs too. 
+                    // If we return a direct URL here, `triggerLink` will use `download` attr, which might be ignored if cross-origin.
+                    // But usually Cobalt URLs are downloadable.
+                    // To be safe, we can try to fetch it as blob IF CORS allows.
+                    try {
+                        const res = await fetch(clientUrl);
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            return URL.createObjectURL(blob);
+                        }
+                    } catch (corsErr) {
+                        // If fetch fails (CORS), just return the raw URL and let browser handle it
+                        console.log("Client-side fetch blocked by CORS, returning raw URL");
+                        return clientUrl;
+                    }
+                }
+            } catch (e) {
+                console.warn(`Client-side probe failed for ${t}:`, e);
+            }
+
+            throw new Error(`All tunnel methods exhausted for ${t}`);
+        };
+
         try {
             if (type === 'both') {
-                setDownloadProgress(25); // Initial sync
-                const [audioUrl, videoUrl] = await Promise.all([bridgeFetch('audio'), bridgeFetch('video')]);
-                setDownloadProgress(100);
+                const [audioUrl, videoUrl] = await Promise.all([attemptDownload('audio'), attemptDownload('video')]);
                 triggerLink(audioUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
                 setTimeout(() => triggerLink(videoUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`), 1000);
-
+                setHubStatus('ready');
+                // Only revoke if it looks like a blob url
                 setTimeout(() => {
-                    URL.revokeObjectURL(audioUrl);
-                    URL.revokeObjectURL(videoUrl);
-                    setHubStatus('ready');
-                    setDownloadProgress(0);
-                }, 5000);
-            } else if (type === 'audio') {
-                const blobUrl = await bridgeFetch('audio');
-                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.m4a`);
-                setTimeout(() => {
-                    URL.revokeObjectURL(blobUrl);
-                    setHubStatus('ready');
-                    setDownloadProgress(0);
-                }, 3000);
+                    if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
+                    if (videoUrl.startsWith('blob:')) URL.revokeObjectURL(videoUrl);
+                }, 60000);
             } else {
-                // Video single fetch
-                const blobUrl = await bridgeFetch('video');
-                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.mp4`);
-                setTimeout(() => {
-                    URL.revokeObjectURL(blobUrl);
-                    setHubStatus('ready');
-                    setDownloadProgress(0);
-                }, 3000);
+                const blobUrl = await attemptDownload(type);
+                triggerLink(blobUrl, `${currentTrack.title.replace(/[^\w\s-]/g, "")}.${type === 'audio' ? 'm4a' : 'mp4'}`);
+                setHubStatus('ready');
+                setTimeout(() => { if (blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl); }, 60000);
             }
         } catch (e) {
-            console.error("Super-Nova Failure:", e);
+            console.error("All tunnel attempts failed:", e);
             setHubStatus('fallback');
+            // Auto-Targeting: Pre-fill Cobalt with the highest-reliability mirror
+            setHubResults(prev => ({
+                ...prev,
+                fallbackUrl: `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`
+            }));
         }
+    };
+
+    const currentTrack = storeTrack || {
+        id: "vibe-check",
+        title: "Feel the Vibe",
+        artist: "Mark Ellis",
+        thumbnail: "file:///home/melly/.gemini/antigravity/brain/b73abbe4-f412-4c81-8753-332faece39cc/player_feel_the_vibe_1771266405368.png",
+        url: ""
     };
 
     if (!currentTrack) return null;
 
     return (
-        <div className="fixed bottom-0 bg-black w-full py-2 h-[80px] px-4 border-t border-neutral-800 z-50">
+        <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="w-full max-w-3xl mx-auto glass-heavy rounded-[40px] overflow-hidden p-2 shadow-2xl shadow-black/60 border border-white/10"
+        >
             <PlayerContent />
-            <div className="grid grid-cols-2 md:grid-cols-3 h-full items-center max-w-[1400px] mx-auto">
-                {/* Track Info */}
-                <div className="flex items-center gap-x-4">
-                    <img
-                        src={currentTrack.thumbnail || "/placeholder-music.png"}
-                        alt="Thumbnail"
-                        className="w-14 h-14 rounded-md object-cover"
-                    />
-                    <div className="flex flex-col truncate">
-                        <p className="text-white font-medium text-sm truncate">{currentTrack.title}</p>
-                        <p className="text-neutral-400 text-xs truncate">{currentTrack.artist}</p>
-                    </div>
-                </div>
-
-                {/* Controls */}
-                <div className="flex flex-col items-center max-w-[400px] w-full gap-y-2">
-                    <div className="flex items-center gap-x-6 text-neutral-400">
-                        <Shuffle size={18} className="cursor-pointer hover:text-white transition" />
-                        <SkipBack
-                            onClick={playPrevious}
-                            size={22}
-                            className="cursor-pointer hover:text-white transition"
-                        />
-                        <button
-                            onClick={togglePlay}
-                            className="bg-white rounded-full p-2 hover:scale-105 transition"
-                        >
-                            {isPlaying ? (
-                                <Pause size={24} className="text-black fill-black" />
-                            ) : (
-                                <Play size={24} className="text-black fill-black ml-1" />
-                            )}
-                        </button>
-                        <SkipForward
-                            onClick={playNext}
-                            size={22}
-                            className="cursor-pointer hover:text-white transition"
-                        />
-                        <Repeat size={18} className="cursor-pointer hover:text-white transition" />
-                    </div>
-                    <div className="w-full flex items-center gap-x-2 px-2">
-                        <span className="text-[10px] text-neutral-400 min-w-[30px] text-right">0:00</span>
-                        <div className="flex-1 h-1 bg-neutral-800 rounded-full relative group cursor-pointer overflow-hidden">
-                            <div
-                                className="absolute h-full bg-neutral-400 group-hover:bg-emerald-500 transition-all"
-                                style={{ width: `${progress * 100}%` }}
-                            />
-                        </div>
-                        <span className="text-[10px] text-neutral-400 min-w-[30px]">{currentTrack.duration || "3:45"}</span>
-                    </div>
-                </div>
-
-                {/* Volume & Extras */}
-                <div className="hidden md:flex items-center justify-end pr-2 gap-x-4">
-                    <button
-                        onClick={() => setPlaybackMode(playbackMode === 'audio' ? 'video' : 'audio')}
-                        className={cn(
-                            "flex items-center gap-x-2 px-3 py-1.5 rounded-full text-[10px] font-bold transition whitespace-nowrap",
-                            playbackMode === 'video'
-                                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20"
-                                : "bg-neutral-800 text-neutral-400 hover:text-white border border-white/5"
-                        )}
+            <div className="flex items-center justify-between px-3 h-20 relative">
+                {/* Track Info (Left) */}
+                <div className="flex items-center gap-x-4 w-[40%] min-w-0">
+                    <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        className="relative w-14 h-14 flex-shrink-0"
                     >
-                        {playbackMode === 'audio' ? <Music size={12} /> : <Video size={12} />}
-                        {playbackMode === 'audio' ? "Audio" : "Video"}
-                    </button>
+                        <img
+                            src={currentTrack.thumbnail || "/placeholder-music.png"}
+                            alt="Thumbnail"
+                            className="w-full h-full rounded-2xl object-cover shadow-2xl"
+                        />
+                        <div className="absolute inset-0 rounded-2xl border border-white/20 shadow-inner" />
+                    </motion.div>
+                    <div className="flex flex-col truncate">
+                        <p className="text-white font-black text-base truncate leading-tight tracking-tight">
+                            {currentTrack.title}
+                        </p>
+                        <p className="text-neutral-400 text-xs font-bold truncate tracking-wide">
+                            {currentTrack.artist}
+                        </p>
+                    </div>
+                </div>
 
-                    {/* Download dropdown */}
-                    <div className="relative" ref={downloadMenuRef}>
-                        <button
-                            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                            className={cn(
-                                "text-neutral-400 hover:text-white transition"
-                            )}
-                            title="Download"
-                        >
-                            <Download size={18} />
-                        </button>
-                        {showDownloadMenu && (
-                            <div className="absolute bottom-full right-0 mb-2 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden min-w-[160px] z-50">
-                                <button
-                                    onClick={() => handleDownload('audio')}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition text-sm text-white/90"
-                                >
-                                    <Music size={18} className="text-[#1DB954]" />
-                                    Audio (High Quality)
-                                </button>
-                                <button
-                                    onClick={() => handleDownload('video')}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 transition text-sm text-white/90"
-                                >
-                                    <Video size={18} className="text-[#1DB954]" />
-                                    Video (HD MP4)
-                                </button>
-                                <button
-                                    onClick={() => handleDownload('both')}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 border-t border-white/5 transition text-sm text-white font-medium"
-                                >
-                                    <Shield size={18} className="text-[#1DB954]" />
-                                    Download Both
-                                </button>
-                            </div>
+                {/* Progress (Center) */}
+                <div className="absolute left-1/2 top-[55%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-y-2 w-full max-w-[180px] md:max-w-[300px]">
+                    <div className="w-full h-1.5 bg-white/10 rounded-full relative cursor-pointer group">
+                        {/* Progress Fill */}
+                        <motion.div
+                            className="absolute h-full pulsar-bg rounded-full"
+                            style={{ width: `${progress * 100}%` }}
+                        />
+                        {/* Progress Handle (Mockup Detail) */}
+                        <motion.div
+                            className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-white/20"
+                            style={{ left: `calc(${progress * 100}% - 8px)` }}
+                        />
+                    </div>
+                </div>
+
+                {/* Controls (Right) */}
+                <div className="flex items-center gap-x-3 w-[40%] justify-end pr-1">
+                    <button
+                        onClick={togglePlay}
+                        className="w-12 h-12 bg-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"
+                    >
+                        {isPlaying ? (
+                            <Pause size={20} className="text-black fill-black" strokeWidth={3} />
+                        ) : (
+                            <Play size={20} className="text-black fill-black ml-1" strokeWidth={3} />
                         )}
-                    </div>
-
-                    <div className="flex items-center gap-x-2 w-[120px]">
-                        <button onClick={toggleMute} className="text-neutral-400 hover:text-white transition">
-                            {volume === 0 || isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                        </button>
-                        <div className="flex-1 h-1 bg-neutral-800 rounded-full relative group">
-                            <input
-                                type="range"
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                value={isMuted ? 0 : volume}
-                                onChange={(e) => {
-                                    const val = parseFloat(e.target.value);
-                                    setVolume(val);
-                                    if (val > 0) setIsMuted(false);
-                                }}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            />
-                            <div
-                                className="absolute h-full bg-neutral-400 group-hover:bg-emerald-500 rounded-full"
-                                style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
-                            />
-                        </div>
-                    </div>
+                    </button>
+                    <button
+                        onClick={playNext}
+                        className="p-2 text-white hover:text-neutral-300 transition"
+                    >
+                        <SkipForward size={32} strokeWidth={2.5} />
+                    </button>
                 </div>
             </div>
 
@@ -427,164 +561,135 @@ const Player = () => {
                                 {/* Status Section */}
                                 <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                                     <div className="flex items-center justify-between mb-4">
-                                        <span className="text-sm text-white/60 font-medium">Acquisition Status</span>
+                                        <span className="text-sm text-white/60 font-medium">Status</span>
                                         {hubStatus === 'fallback' && (
                                             <div className="flex items-center gap-2 text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
                                                 <AlertTriangle size={12} />
-                                                <span className="text-[10px] font-bold uppercase tracking-widest">Restricted</span>
+                                                <span className="text-[10px] font-bold uppercase tracking-widest">Manual Required</span>
                                             </div>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="flex items-center gap-2 text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                                                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />
-                                                <span className="text-[10px] font-bold uppercase tracking-widest">Quantum Bridge</span>
+                                                <Loader2 size={12} className="animate-spin" />
+                                                <span className="text-[10px] font-bold uppercase tracking-widest">Tunneling</span>
                                             </div>
                                         )}
                                     </div>
-                                    <p className="text-xs text-white/40 leading-relaxed italic">
+                                    <div className="text-xs text-white/40 leading-relaxed">
                                         {hubStatus === 'probing' && (
                                             <span className="flex items-center gap-2">
                                                 <Loader2 size={14} className="animate-spin text-[#1DB954]" />
-                                                {extractionLayer === 'ytdl' && "Deciphering YouTube Signature logic (InnerTube Layer)..."}
-                                                {extractionLayer === 'cobalt' && "Injecting stream into Global Cobalt Network..."}
-                                                {extractionLayer === 'shotgun' && "Probing verified worldwide proxy nodes..."}
+                                                Analyzing YouTube protection layers...
                                             </span>
                                         )}
-                                        {hubStatus === 'obliterating' && (
-                                            <div className="w-full space-y-2">
-                                                <p className="text-[#1DB954] font-medium flex items-center gap-2">
-                                                    <AlertTriangle size={14} className="animate-pulse" />
-                                                    Signature Detected: Establishing Pulsar Handshake...
-                                                </p>
-                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-[#1DB954] transition-all duration-300"
-                                                        style={{ width: `${handshakeProgress}%` }}
-                                                    />
-                                                </div>
-                                                <p className="text-[10px] text-white/40">
-                                                    Simulating active human playback session: {handshakeProgress}%
-                                                </p>
-                                            </div>
+                                        {(hubStatus === 'scanning' || hubStatus === 'probing') && (
+                                            <span className="flex items-center gap-2 text-blue-400">
+                                                <Loader2 size={14} className="animate-spin" />
+                                                {statusMessage || "Quantum Mirror Search (400+ Nodes)..."}
+                                            </span>
                                         )}
                                         {hubStatus === 'tunneling' && (
                                             <div className="w-full space-y-3">
-                                                <p className="flex items-center gap-2 text-sm text-white/90 font-medium">
-                                                    <Loader2 size={16} className="animate-spin text-purple-500" />
-                                                    {downloadProgress === 0 && "Negotiating Quantum Handshake..."}
-                                                    {downloadProgress > 0 && downloadProgress < 30 && "Fragmenting Binary Stream..."}
-                                                    {downloadProgress >= 30 && downloadProgress < 60 && "Encrypted Tunnel Synchronized..."}
-                                                    {downloadProgress >= 60 && downloadProgress < 90 && "Streaming Media Fragments..."}
-                                                    {downloadProgress >= 90 && "Reassembling Media Blob..."}
-                                                </p>
-                                                <div className="relative w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                                <div className="flex items-center justify-between text-[10px] font-bold text-purple-400 uppercase">
+                                                    <span>Mirror Stream Tunnel</span>
+                                                    <span>{downloadProgress}%</span>
+                                                </div>
+                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                                                     <div
-                                                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-purple-600 transition-all duration-300 animate-gradient-x"
-                                                        style={{
-                                                            width: `${downloadProgress || 25}%`,
-                                                            backgroundSize: '200% 100%'
-                                                        }}
+                                                        className="h-full bg-purple-500 transition-all duration-300"
+                                                        style={{ width: `${downloadProgress}%` }}
                                                     />
                                                 </div>
-                                                <div className="flex justify-between items-center text-[10px] font-mono tracking-tighter uppercase">
-                                                    <span className="text-purple-400 animate-pulse">Bridge: Active</span>
-                                                    <span className="text-white/40">{downloadProgress > 0 ? `${downloadProgress}%` : "Establishing..."}</span>
-                                                </div>
+                                                <p className="text-[9px] text-white/30 italic">
+                                                    Encrypting stream packets through global mirror fleet...
+                                                </p>
                                             </div>
                                         )}
-                                        {hubStatus === 'ready' && "Acquisition successful. Your download has been initiated."}
-                                        {hubStatus === 'fallback' && "Fleet verification failed. Switch to manual acquisition below."}
-                                    </p>
-                                </div>
-
-                                {/* Universal Acquisition Button */}
-                                {(hubStatus === 'tunneling' || hubStatus === 'fallback') && (
-                                    <button
-                                        disabled={hubStatus === 'tunneling'}
-                                        onClick={() => handleGhostProtocol('both', true)}
-                                        className={cn(
-                                            "w-full py-4 rounded-xl font-bold uppercase tracking-widest transition-all duration-500 shadow-lg flex items-center justify-center gap-2 group mb-6 border-b-2",
-                                            hubStatus === 'tunneling'
-                                                ? "bg-purple-900/50 text-purple-300 border-purple-500/30 cursor-not-allowed opacity-80"
-                                                : "bg-[#1DB954] text-black border-[#1DB954]/50 hover:scale-[1.02] hover:bg-[#1ed760] active:scale-95 shadow-[#1DB954]/20"
+                                        {hubStatus === 'ready' && (
+                                            <span className="flex items-center gap-2 text-[#1DB954]">
+                                                <CheckCircle2 size={14} />
+                                                Warp-Tunnel Established. Acquisition successful.
+                                            </span>
                                         )}
-                                    >
-                                        <div className="relative">
-                                            <Music size={18} className={cn(hubStatus === 'tunneling' && "animate-bounce")} />
-                                            {hubStatus === 'tunneling' && <div className="absolute inset-0 bg-purple-400/50 blur-lg animate-pulse rounded-full" />}
+                                        {hubStatus === 'fallback' && (
+                                            <span className="flex items-center gap-2 text-amber-500">
+                                                <AlertTriangle size={14} />
+                                                Vercel-IP Blacklisted. Extreme Deep-Pulse required.
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Results / Action Section */}
+                                {hubStatus === 'ready' && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-white/60">Your files are now available locally:</p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {hubResults.audio && (
+                                                <button
+                                                    onClick={() => triggerLink(hubResults.audio!.url, hubResults.audio!.filename)}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition group"
+                                                >
+                                                    <Music size={16} className="text-purple-400" />
+                                                    <span className="text-xs font-bold text-white">Audio</span>
+                                                </button>
+                                            )}
+                                            {hubResults.video && (
+                                                <button
+                                                    onClick={() => triggerLink(hubResults.video!.url, hubResults.video!.filename)}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition group"
+                                                >
+                                                    <Video size={16} className="text-blue-400" />
+                                                    <span className="text-xs font-bold text-white">Video</span>
+                                                </button>
+                                            )}
                                         </div>
-                                        {hubStatus === 'tunneling' ? "Tunneling Active..." : "Tunnel Both (Audio + Video)"}
-                                    </button>
+                                        <button
+                                            onClick={() => setIsHubOpen(false)}
+                                            className="w-full py-3 bg-[#1DB954] hover:scale-[1.02] active:scale-95 rounded-xl text-black font-bold text-sm transition mt-2 shadow-lg shadow-[#1DB954]/20"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
                                 )}
-                                <div className={cn(
-                                    "p-4 rounded-xl border transition-all duration-300",
-                                    hubResults.audio ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
-                                )}>
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className={cn("p-2 rounded-lg", hubResults.audio ? "bg-[#1DB954]/20" : "bg-white/5")}>
-                                            <Music size={24} className={hubResults.audio ? "text-[#1DB954]" : "text-white/20"} />
-                                        </div>
-                                        <span className="text-xs font-medium">Audio M4A</span>
-                                        <button
-                                            onClick={() => {
-                                                if (hubResults.audio) triggerLink(hubResults.audio.url, hubResults.audio.filename);
-                                                else if (hubStatus === 'tunneling') handleGhostProtocol('audio');
-                                                else handleDownload('audio', true);
-                                            }}
-                                            className={cn(
-                                                "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
-                                                hubResults.audio
-                                                    ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                    : hubStatus === 'tunneling'
-                                                        ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
-                                            )}
-                                        >
-                                            {hubResults.audio ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
-                                        </button>
-                                    </div>
-                                </div>
 
-                                <div className={cn(
-                                    "p-4 rounded-xl border transition-all duration-300",
-                                    hubResults.video ? "bg-[#1DB954]/10 border-[#1DB954]/20" : "bg-white/5 border-white/5 grayscale"
-                                )}>
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className={cn("p-2 rounded-lg", hubResults.video ? "bg-[#1DB954]/20" : "bg-white/5")}>
-                                            <Video size={24} className={hubResults.video ? "text-[#1DB954]" : "text-white/20"} />
+                                {hubStatus === 'fallback' && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-center text-white/40 uppercase tracking-widest mb-2">
+                                            Auto-Tunnel Blocked. Select Secure Method:
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => window.open(`https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Auto)
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://cobalt.canine.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-blue-400" /> Cobalt (Mirror)
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${currentTrack.id}`)}&f=${playbackMode === 'audio' ? 'mp3' : 'mp4'}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-amber-400" /> Loader.to
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://www.y2mate.com/youtube/${currentTrack.id}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-[#323232] hover:bg-[#404040] rounded-lg text-xs font-bold transition group"
+                                            >
+                                                <ExternalLink size={14} className="group-hover:text-red-400" /> Y2Mate
+                                            </button>
                                         </div>
-                                        <span className="text-xs font-medium">Video MP4</span>
-                                        <button
-                                            onClick={() => {
-                                                if (hubResults.video) triggerLink(hubResults.video.url, hubResults.video.filename);
-                                                else if (hubStatus === 'tunneling') handleGhostProtocol('video');
-                                                else handleDownload('video', true);
-                                            }}
-                                            className={cn(
-                                                "w-full py-2 rounded-full text-[10px] font-bold uppercase tracking-tighter transition shadow-lg",
-                                                hubResults.video
-                                                    ? "bg-[#1DB954] text-black hover:scale-105 active:scale-95 shadow-[#1DB954]/20"
-                                                    : hubStatus === 'tunneling'
-                                                        ? "bg-purple-600 text-white hover:scale-105 active:scale-95 shadow-purple-600/20"
-                                                        : "bg-amber-500 text-black hover:scale-105 active:scale-95 animate-pulse shadow-amber-500/20"
-                                            )}
-                                        >
-                                            {hubResults.video ? "Download" : hubStatus === 'tunneling' ? "Tunnel Stream" : "Force Unlock"}
-                                        </button>
+                                        <p className="text-[10px] text-center text-white/30">
+                                            Note: Opens in new secure tab. No ads.
+                                        </p>
                                     </div>
-                                </div>
+                                )}
                             </div>
-
-                            {/* External Acquisition Button */}
-                            {hubStatus === 'fallback' && hubResults.fallbackUrl && (
-                                <button
-                                    onClick={() => window.open(hubResults.fallbackUrl!, '_blank')}
-                                    className="w-full flex items-center justify-center gap-2 p-4 bg-amber-500 text-black rounded-xl font-bold text-sm hover:scale-[1.02] active:scale-[0.98] transition shadow-lg shadow-amber-500/20"
-                                >
-                                    <ExternalLink size={18} />
-                                    Open Secure Acquisition Window
-                                </button>
-                            )}
                         </div>
 
                         <div className="px-8 py-4 bg-white/5 border-t border-white/5">
@@ -595,7 +700,7 @@ const Player = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </motion.div>
     );
 };
 

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cobalt Probe Debugger</title>
+</head>
+<body>
+    <h1>Testing Cobalt Instances...</h1>
+    <div id="logs"></div>
+    <script>
+        const COBALT_PUBLIC_INSTANCES = [
+            "https://cobalt.canine.tools",
+            "https://lc.vern.cc",
+            "https://cobalt.tools",
+            "https://api.cobalt.tools",
+            "https://cobalt.mayo.sh",
+            "https://cobalt.meowing.de",
+            "https://cobalt.razor.sh"
+        ];
+
+        function log(msg) {
+            console.log(msg);
+            const div = document.createElement('div');
+            div.textContent = msg;
+            document.getElementById('logs').appendChild(div);
+        }
+
+        async function probe() {
+            log("Starting probe for Gunna (mANvg9R1xeI)...");
+            for (const instance of COBALT_PUBLIC_INSTANCES) {
+                try {
+                    log(`Testing ${instance}...`);
+                    const response = await fetch(`${instance}/api/json`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        body: JSON.stringify({
+                            url: "https://www.youtube.com/watch?v=mANvg9R1xeI",
+                            videoQuality: "720",
+                            downloadMode: "audio",
+                            youtubeVideoCodec: "h264",
+                            audioFormat: "best",
+                            filenamePattern: "basic"
+                        }),
+                        signal: AbortSignal.timeout(5000)
+                    });
+
+                    log(`Status for ${instance}: ${response.status}`);
+                    if (!response.ok) {
+                        log(`FAILED ${instance}: HTTP ${response.status}`);
+                        continue;
+                    }
+                    
+                    const data = await response.json();
+                    log(`Response from ${instance}: ${JSON.stringify(data).substring(0, 100)}...`);
+                    
+                    if (data.status === "error") {
+                         log(`API Error from ${instance}: ${data.text}`);
+                         continue;
+                    }
+
+                    if (data.url) {
+                        log(`SUCCESS! Found URL on ${instance}: ${data.url}`);
+                        // Try HEAD request to see if CORS allows usage
+                        try {
+                            await fetch(data.url, { method: 'HEAD' });
+                            log(`CORS Check Passed for ${data.url}`);
+                        } catch(e) {
+                            log(`CORS Check Failed for ${data.url}: ${e}`);
+                        }
+                    } else {
+                        log(`No URL in response from ${instance}`);
+                    }
+
+                } catch (e) {
+                    log(`Exception for ${instance}: ${e.name}: ${e.message}`);
+                }
+            }
+            log("Probe complete.");
+        }
+
+        probe();
+    </script>
+</body>
+</html>
