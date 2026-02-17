@@ -53,94 +53,73 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             setDownloadProgress(0);
 
             try {
-                // Phase 1: Client-Side Probe (Bypasses Vercel IP blocking)
+                // Phase 1: Client-Side Probe
                 console.log(`Phase 1: Probing client-side for ${targetType}...`);
+                setDownloadProgress(10);
                 let directUrl = await clientSideProbe(track.id, targetType);
-                let blob: Blob | null = null;
 
-                // Phase 2: Direct Client-Side Fetch (Best for performance + reliability)
+                // Phase 2: Direct Native Download (Most Reliable)
                 if (directUrl) {
-                    try {
-                        console.log("Phase 2: Attempting direct client-side fetch...");
-                        setDownloadProgress(10);
-                        const response = await fetch(directUrl);
-                        if (response.ok) {
-                            const reader = response.body?.getReader();
-                            if (reader) {
-                                const contentLength = response.headers.get('content-length');
-                                const total = contentLength ? parseInt(contentLength, 10) : 0;
-                                let loaded = 0;
-                                const chunks: BlobPart[] = [];
+                    console.log("Phase 2: Triggering native browser download...", directUrl);
+                    setDownloadProgress(100);
 
-                                while (true) {
-                                    const { done, value } = await reader.read();
-                                    if (done) break;
-                                    if (value) {
-                                        chunks.push(value);
-                                        loaded += value.length;
-                                        if (total > 0) {
-                                            setDownloadProgress(10 + Math.floor((loaded / total) * 85));
-                                        } else {
-                                            setDownloadProgress(Math.min(90, 10 + Math.floor(loaded / 500000)));
-                                        }
-                                    }
-                                }
-                                blob = new Blob(chunks, { type: targetType === 'audio' ? 'audio/mp4' : 'video/mp4' });
-                                console.log("Phase 2 Success: Direct client fetch complete.");
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Phase 2 Failed (likely CORS), falling back to server proxy...", e);
-                    }
-                }
-
-                // Phase 3: Server Proxy / Extraction (Fallback)
-                if (!blob) {
-                    console.log("Phase 3: Engaging Server Proxy/Extraction...");
-                    let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
-                    if (directUrl) apiUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
-
-                    setDownloadProgress(15);
-                    const response = await fetch(apiUrl);
-                    if (!response.ok) throw new Error(`Server error (${response.status})`);
-
-                    const reader = response.body?.getReader();
-                    if (!reader) throw new Error("Stream not available");
-                    const chunks: BlobPart[] = [];
-                    let loaded = 0;
-                    const contentLength = response.headers.get('content-length');
-                    const total = contentLength ? parseInt(contentLength, 10) : 0;
-
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        if (value) {
-                            chunks.push(value);
-                            loaded += value.length;
-                            if (total > 0) {
-                                setDownloadProgress(15 + Math.floor((loaded / total) * 80));
-                            } else {
-                                setDownloadProgress(Math.min(95, 15 + Math.floor(loaded / 500000)));
-                            }
-                        }
-                    }
-                    blob = new Blob(chunks, { type: targetType === 'audio' ? 'audio/mp4' : 'video/mp4' });
-                }
-
-                setDownloadProgress(95);
-
-                // Trigger browser download
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
+                    // Create invisible link and click it
+                    // This bypasses CORS (browser handles opaque response) and Server IP blocks
                     const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `${track.title.replace(/[^\w\s-]/g, '')}.${targetType === 'audio' ? 'm4a' : 'mp4'}`;
-                    link.style.display = 'none';
+                    link.href = directUrl;
+                    link.download = `${track.title}.${targetType === 'audio' ? 'mp3' : 'mp4'}`;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+                    setDownloadingId(null);
+                    setDownloadProgress(0);
+                    return;
                 }
+
+                // Phase 3: Server Extraction Fallback
+                console.log("Phase 3: Client probe failed, engaging Server Extraction...");
+                setDownloadProgress(20);
+
+                let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
+
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`Server error (${response.status})`);
+
+                const reader = response.body?.getReader();
+                if (!reader) throw new Error("Stream not available");
+
+                const contentLength = response.headers.get('content-length');
+                const total = contentLength ? parseInt(contentLength, 10) : 0;
+                let loaded = 0;
+                const chunks: BlobPart[] = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    if (value) {
+                        chunks.push(value);
+                        loaded += value.length;
+                        if (total > 0) {
+                            setDownloadProgress(20 + Math.floor((loaded / total) * 80));
+                        } else {
+                            setDownloadProgress(Math.min(95, 20 + Math.floor(loaded / 500000)));
+                        }
+                    }
+                }
+
+                const blob = new Blob(chunks, { type: targetType === 'audio' ? 'audio/mp4' : 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+                const aLink = document.createElement('a');
+                aLink.href = url;
+                aLink.download = `${track.title.replace(/[^\w\s-]/g, '')}.${targetType === 'audio' ? 'm4a' : 'mp4'}`;
+                aLink.style.display = 'none';
+                document.body.appendChild(aLink);
+                aLink.click();
+                document.body.removeChild(aLink);
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
                 setDownloadProgress(100);
 
             } catch (err) {
@@ -151,7 +130,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         try {
             if (type === 'both') {
                 await downloadOne('audio');
-                await new Promise(r => setTimeout(r, 500));
+                await new Promise(r => setTimeout(r, 1000));
                 await downloadOne('video');
             } else {
                 await downloadOne(type);
