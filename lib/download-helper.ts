@@ -63,7 +63,9 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                 };
 
                 const targetUrl = useProxy
-                    ? `https://corsproxy.io/?${encodeURIComponent(endpoint)}`
+                    ? (Math.random() > 0.5
+                        ? `https://corsproxy.io/?${encodeURIComponent(endpoint)}`
+                        : `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`)
                     : endpoint;
 
                 const res = await fetchWithTimeout(targetUrl, {
