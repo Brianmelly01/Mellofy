@@ -66,23 +66,37 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             // This avoids CORS issues and uses multiple fallback strategies
 
             const attemptDownload = async (targetType: 'audio' | 'video') => {
-                setDownloadProgress(5); // Started probing
+                setDownloadProgress(5);
                 console.log(`Probing for ${targetType} source...`);
 
-                // Try to get a direct URL via client-side probing
+                // 1. Client-Side Probe
                 const directUrl = await clientSideProbe(track.id, targetType);
                 console.log(`Probe result for ${targetType}:`, directUrl ? "Found" : "Not Found");
 
-                // Construct the API URL. 
-                // If we found a direct URL, we pass it to the API to proxy (avoiding CORS).
-                // If not, we still call the API to let it try its own server-side extraction.
+                // 2. Try Direct Client-Side Fetch (Best for performance + no server load)
+                if (directUrl) {
+                    try {
+                        console.log("Attempting direct client-side fetch...");
+                        const response = await fetch(directUrl);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            console.log("Direct client fetch successful!");
+                            return blob;
+                        }
+                    } catch (e) {
+                        console.warn("Direct client fetch failed (likely CORS). Falling back to proxy...", e);
+                    }
+                }
+
+                // 3. Fallback to API Proxy
                 let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true`;
                 if (directUrl) {
                     apiUrl += `&direct_url=${encodeURIComponent(directUrl)}`;
                 }
 
+                console.log("Attempting API proxy download...");
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+                if (!response.ok) throw new Error(`Proxy failed: ${response.status}`);
 
                 const contentLength = response.headers.get('content-length');
                 const total = contentLength ? parseInt(contentLength, 10) : 0;
@@ -99,10 +113,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                         chunks.push(value);
                         loaded += value.length;
                         if (total > 0) {
-                            // Map progress to 10-100% range (0-10 was probing)
                             setDownloadProgress(10 + Math.floor((loaded / total) * 90));
                         } else {
-                            // Indeterminate
                             setDownloadProgress(Math.min(95, 10 + Math.floor(loaded / 1000000 * 5)));
                         }
                     }
@@ -144,18 +156,17 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         } catch (err: any) {
             console.error("Download error:", err);
 
-            // Client-side fallback: Try to download directly if proxy failed
-            if (confirm(`Download failed via Checkpoint 1. Would you like to try the direct link (Checkpoint 2)?\n\nError: ${err.message}`)) {
+            // 4. Final Fallback: Window.open (Redirection)
+            if (confirm(`Seamless download failed. Would you like to try opening the direct link in a new tab? (Checkpoint 2)\n\nError: ${err.message}`)) {
                 try {
                     const directUrl = await clientSideProbe(track.id, type === 'both' ? 'video' : type);
                     if (directUrl) {
                         window.open(directUrl, '_blank');
                         return;
                     }
+                    alert("Could not find a working link even for manual download.");
                 } catch (e) { }
             }
-
-            alert(`Download failed: ${err.message || 'Unknown error'}. The video might be restricted.`);
         } finally {
             setDownloadingId(null);
             setDownloadProgress(0);
