@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Innertube from "youtubei.js";
+import Innertube, { UniversalCache } from "youtubei.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -183,6 +183,7 @@ async function extractViaYouTubeJS(
         const yt = await Innertube.create({
             retrieve_player: true,
             generate_session_locally: true,
+            cache: new UniversalCache(false),
         });
 
         const info = await yt.getBasicInfo(videoId);

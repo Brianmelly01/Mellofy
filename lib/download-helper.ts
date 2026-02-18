@@ -13,9 +13,10 @@ export const INVIDIOUS_NODES = [
 ];
 
 export const COBALT_NODES = [
-    "https://cobalt-backend.canine.tools",
-    "https://cobalt-api.meowing.de",
-    "https://capi.3kh0.net",
+    // All public instances currently require auth or have strict CORS/Bot protection
+    // "https://cobalt-backend.canine.tools",
+    // "https://cobalt-api.meowing.de",
+    // "https://capi.3kh0.net",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
