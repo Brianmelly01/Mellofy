@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@distube/ytdl-core"],
+  serverExternalPackages: ["youtubei.js"],
 };
 
 export default nextConfig;
