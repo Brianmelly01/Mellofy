@@ -12,22 +12,16 @@ const PROXY_ROTATION = [
     "https://api.codetabs.com/v1/proxy?quest="
 ];
 
-// Cobalt instances — verified working, use POST / with Accept/Content-Type JSON headers
+// Cobalt instances — verified working via instances.cobalt.best (Feb 2026)
 const COBALT_INSTANCES = [
-    "https://api.cobalt.tools",
-    "https://cobalt.meowing.de",
-    "https://co.eepy.moe",
-    "https://cobalt-api.v06.me",
-    "https://api.cobalt.kwiatekmiki.pl",
-    "https://cobalt.154.53.53.53.sslip.io",
-    "https://cobalt.q69.it",
-    "https://cobaltt.tools",
-    "https://lc.vern.cc",
-    "https://cobalt.xy24.eu.org",
-    "https://cobalt.kinuseka.net",
-    "https://co.wuk.sh",
-    "https://cobalt.exozy.me",
-    "https://cobalt.majhcc.xyz",
+    "https://cobalt-api.meowing.de",
+    "https://cobalt-backend.canine.tools",
+    "https://kityune.imput.net",
+    "https://nachos.imput.net",
+    "https://sunny.imput.net",
+    "https://blossom.imput.net",
+    "https://capi.3kh0.net",
+    "https://downloadapi.stuff.solutions",
 ];
 
 // Piped API instances — verified as recently up

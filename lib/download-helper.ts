@@ -13,20 +13,14 @@ export const INVIDIOUS_NODES = [
 ];
 
 export const COBALT_NODES = [
-    "https://api.cobalt.tools",
-    "https://cobalt.meowing.de",
-    "https://co.eepy.moe",
-    "https://cobalt-api.v06.me",
-    "https://api.cobalt.kwiatekmiki.pl",
-    "https://cobalt.154.53.53.53.sslip.io",
-    "https://cobalt.q69.it",
-    "https://cobaltt.tools",
-    "https://lc.vern.cc",
-    "https://cobalt.xy24.eu.org",
-    "https://cobalt.kinuseka.net",
-    "https://co.wuk.sh",
-    "https://cobalt.exozy.me",
-    "https://cobalt.majhcc.xyz",
+    "https://cobalt-api.meowing.de",
+    "https://cobalt-backend.canine.tools",
+    "https://kityune.imput.net",
+    "https://nachos.imput.net",
+    "https://sunny.imput.net",
+    "https://blossom.imput.net",
+    "https://capi.3kh0.net",
+    "https://downloadapi.stuff.solutions",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
