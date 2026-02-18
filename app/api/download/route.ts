@@ -1,30 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
+import Innertube from "youtubei.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// OMEGA FLEET V23: Pulsar-Core (Zero-Signature Extraction)
-const PROXY_ROTATION = [
-    "https://api.allorigins.win/get?url=",
-    "https://corsproxy.io/?",
-    "https://proxy.cors.sh/",
-    "https://api.codetabs.com/v1/proxy?quest="
-];
-
-// Cobalt instances — verified working via instances.cobalt.best (Feb 2026)
+// ── Cobalt instances verified for YouTube (instances.cobalt.best/service/youtube) ──
 const COBALT_INSTANCES = [
-    "https://cobalt-api.meowing.de",
     "https://cobalt-backend.canine.tools",
-    "https://kityune.imput.net",
-    "https://nachos.imput.net",
-    "https://sunny.imput.net",
-    "https://blossom.imput.net",
+    "https://cobalt-api.meowing.de",
     "https://capi.3kh0.net",
-    "https://downloadapi.stuff.solutions",
 ];
 
-// Piped API instances — verified as recently up
+// Piped API instances
 const PIPED_INSTANCES = [
     "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
@@ -33,714 +20,584 @@ const PIPED_INSTANCES = [
     "https://pipedapi.colinslegacy.com", "https://pipedapi.rivo.lol",
 ];
 
-// Invidious instances — NOTE: most have api:false, used as last resort
+// Invidious instances (last resort)
 const INVIDIOUS_INSTANCES = [
     "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
 ];
-
-// Combined proxy fleet for legacy code paths
-const PROXY_INSTANCES = [...PIPED_INSTANCES, ...INVIDIOUS_INSTANCES];
 
 const STABLE_FALLBACKS = [
     "https://cobalt.tools",
     "https://cobalt.canine.tools",
 ];
 
-// V25: Chronos Engine (Real-time STS Sync)
-let CACHED_STS = 20147; // Default 2026-ready STS
-let STS_LAST_FETCH = 0;
-
-async function SYNC_STS() {
-    if (Date.now() - STS_LAST_FETCH < 3600000) return CACHED_STS;
-    try {
-        const res = await fetch("https://www.youtube.com/iframe_api", { signal: AbortSignal.timeout(5000) });
-        if (res.ok) {
-            const text = await res.text();
-            const m = text.match(/signatureTimestamp:(\d+)/);
-            if (m) {
-                CACHED_STS = parseInt(m[1]);
-                STS_LAST_FETCH = Date.now();
-            }
-        }
-    } catch (e) { }
-    return CACHED_STS;
-}
-
-// V23: Curated Human-Signal PoTokens (Smashes VEVO Signature blocks)
-const HUMAN_POTOKENS = [
-    "MnS8A1-x9_r3K7fB2gD5L" + Math.random().toString(36).substring(2, 30),
-    "Mn82K-p09_jA1fS0lE9R" + Math.random().toString(36).substring(2, 30),
-    "MnZ1Q-a87_oP2kL1mV3X" + Math.random().toString(36).substring(2, 30),
-    "MnH7G-e54_uI0oP9tY5Z" + Math.random().toString(36).substring(2, 30),
-];
-
-// V23 Pulsar-Core Headers (Active Playback Simulation)
-const GET_PULSAR_HEADERS = (force: boolean = false, incomingUA?: string) => {
-    // Mode 19: Chronos Spear (Dynamic STS + TV Mimicry)
-    const isTV = force && Math.random() > 0.4; // Weighted higher for TV
-    const isMobile = force && !isTV;
-
-    let userAgent = incomingUA || (isTV
-        ? "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.2 Chrome/131.0.0.0 TV Safari/537.36"
-        : isMobile
-            ? "com.google.android.youtube/19.12.35 (Linux; U; Android 14; en_US; Pixel 9; build/AP1A.240505.004)"
-            : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
-
-    // Rotate tokens
-    const token = force ? HUMAN_POTOKENS[Math.floor(Math.random() * HUMAN_POTOKENS.length)] : "M" + Math.random().toString(36).substring(2, 40);
-
-    return {
-        "Content-Type": "application/json",
-        "Accept": "*/*",
-        "User-Agent": userAgent,
-        "X-YouTube-Client-Name": isTV ? "62" : (isMobile ? "21" : "1"),
-        "X-YouTube-Client-Version": isTV ? "1.20250224.01.00" : (isMobile ? "19.12.35" : "2.20250224.01.00"),
-        "X-Goog-Visitor-Id": Math.random().toString(36).substring(2, 12),
-        "X-YouTube-Po-Token": token,
-        "X-Goog-Authuser": "0",
-        "X-YouTube-STS": CACHED_STS.toString(),
-        "Origin": "https://www.youtube.com",
-        "Referer": "https://www.youtube.com/",
-        "X-YouTube-Identity": Math.random().toString(36).substring(2, 12),
-        "X-Playback-Session-Id": Math.random().toString(36).substring(2, 20),
-    };
-};
-
-async function verifyUrl(url: string, force: boolean = false): Promise<boolean> {
-    const knownDomains = ["googlevideo.com", "piped", "invidious", "manifest", "m3u8", "googlestatic", "stream", "cobalt", "dl", "api", "youtube"];
-    if (force || knownDomains.some(d => url.includes(d))) {
-        return true;
-    }
-    try {
-        const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(force ? 4000 : 2500) });
-        if (!res.ok) return false;
-        const contentType = res.headers.get("content-type") || "";
-        return contentType.includes("video") || contentType.includes("audio") || contentType.includes("application/ogg") || contentType.includes("application/x-mpegurl") || contentType.includes("application/octet-stream");
-    } catch (e) {
-        return true;
-    }
-}
-
-// Direct InnerTube extraction — calls YouTube's own API with multiple client types
-// This is the most reliable method from Vercel since it doesn't depend on third-party services
-async function extractViaInnerTube(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
-    const sts = await SYNC_STS();
-
-    const clients = [
-        {
-            name: "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
-            version: "2.0",
-            apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-            ua: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.2 Chrome/131.0.0.0 TV Safari/537.36"
-        },
-        {
-            name: "TV_EMBEDDED",
-            version: "2.0",
-            apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-            ua: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/5.2 Chrome/131.0.0.0 TV Safari/537.36"
-        },
-        {
-            name: "ANDROID_MUSIC",
-            version: "7.27.52",
-            apiKey: "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-            ua: "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 14; en_US; Pixel 9; Build/AP1A.240505.004) gzip"
-        },
-        {
-            name: "ANDROID",
-            version: "19.12.35",
-            apiKey: "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-            ua: "com.google.android.youtube/19.12.35 (Linux; U; Android 14; en_US; Pixel 9; Build/AP1A.240505.004) gzip"
-        },
-        {
-            name: "IOS",
-            version: "19.45.4",
-            apiKey: "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
-            ua: "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)"
-        },
-    ];
-
-    for (const client of clients) {
-        try {
-            console.log(`InnerTube: Trying ${client.name}...`);
-            const payload: any = {
-                videoId,
-                context: {
-                    client: {
-                        clientName: client.name,
-                        clientVersion: client.version,
-                        hl: "en",
-                        gl: "US",
-                    }
-                },
-                playbackContext: {
-                    contentPlaybackContext: {
-                        signatureTimestamp: sts
-                    }
-                }
-            };
-
-            // Android/iOS clients need extra fields
-            if (client.name.includes("ANDROID")) {
-                payload.context.client.androidSdkVersion = 34;
-                payload.context.client.platform = "MOBILE";
-                payload.context.client.osName = "Android";
-                payload.context.client.osVersion = "14";
-            }
-            if (client.name === "IOS") {
-                payload.context.client.deviceMake = "Apple";
-                payload.context.client.deviceModel = "iPhone16,2";
-                payload.context.client.platform = "MOBILE";
-                payload.context.client.osName = "iOS";
-                payload.context.client.osVersion = "18.1.0.22B83";
-            }
-
-            const res = await fetch(
-                `https://www.youtube.com/youtubei/v1/player?key=${client.apiKey}&prettyPrint=false`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "User-Agent": client.ua,
-                        "X-Goog-Api-Key": client.apiKey,
-                        "Origin": "https://www.youtube.com",
-                    },
-                    body: JSON.stringify(payload),
-                    signal: AbortSignal.timeout(10000),
-                }
-            );
-
-            if (!res.ok) { console.log(`InnerTube: ${client.name} HTTP ${res.status}`); continue; }
-            const data = await res.json();
-
-            // Check for playability
-            if (data.playabilityStatus?.status !== "OK") {
-                console.log(`InnerTube: ${client.name} playability: ${data.playabilityStatus?.status}`);
-                continue;
-            }
-
-            const formats = [
-                ...(data.streamingData?.adaptiveFormats || []),
-                ...(data.streamingData?.formats || [])
-            ];
-
-            if (formats.length === 0) { console.log(`InnerTube: ${client.name} no formats`); continue; }
-
-            // Filter for formats with direct URLs (no signatureCipher)
-            const directFormats = formats.filter((f: any) => f.url && !f.signatureCipher && !f.cipher);
-            if (directFormats.length === 0) { console.log(`InnerTube: ${client.name} all formats are ciphered`); continue; }
-
-            let format;
-            if (type === "audio") {
-                format = directFormats.find((f: any) => f.mimeType?.includes("audio/mp4"))
-                    || directFormats.find((f: any) => f.mimeType?.includes("audio/webm"))
-                    || directFormats.find((f: any) => f.mimeType?.includes("audio"));
-            } else {
-                format = directFormats.find((f: any) => f.mimeType?.includes("video/mp4") && f.qualityLabel === "720p")
-                    || directFormats.find((f: any) => f.mimeType?.includes("video/mp4") && f.qualityLabel === "480p")
-                    || directFormats.find((f: any) => f.mimeType?.includes("video/mp4") && f.url)
-                    || directFormats.find((f: any) => f.mimeType?.includes("video") && f.url);
-            }
-
-            if (format?.url) {
-                console.log(`InnerTube: ${client.name} SUCCESS — found ${type} stream`);
-                return {
-                    url: format.url,
-                    title: data.videoDetails?.title || "download"
-                };
-            }
-        } catch (e) {
-            console.log(`InnerTube: ${client.name} error:`, e);
-            continue;
-        }
-    }
-
-    console.log("InnerTube: All clients exhausted");
-    return null;
-}
-
-async function tryCobalt(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string; quality?: string } | null> {
+// ── Cobalt API ──
+async function tryCobalt(
+    instance: string,
+    videoId: string,
+    type: string,
+): Promise<{ url: string; title: string } | null> {
     const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-    const cobaltHeaders = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": incomingUA || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    };
 
     const attemptFetch = async (endpoint: string, isV10: boolean) => {
         try {
-            const payload = isV10 ? {
-                url: targetUrl,
-                videoQuality: "720",
-                downloadMode: type === "audio" ? "audio" : "auto",
-                youtubeVideoCodec: "h264",
-                alwaysProxy: false,
-            } : {
-                url: targetUrl,
-                vCodec: 'h264',
-                vQuality: '720',
-                isAudioOnly: type === 'audio',
-            };
+            const payload = isV10
+                ? {
+                    url: targetUrl,
+                    videoQuality: "720",
+                    downloadMode: type === "audio" ? "audio" : "auto",
+                    youtubeVideoCodec: "h264",
+                }
+                : {
+                    url: targetUrl,
+                    vCodec: "h264",
+                    vQuality: "720",
+                    isAudioOnly: type === "audio",
+                };
 
             const res = await fetch(endpoint, {
                 method: "POST",
-                headers: cobaltHeaders,
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                },
                 body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(8000),
+                signal: AbortSignal.timeout(10000),
             });
 
             if (res.ok) {
                 const data = await res.json();
-                if (data.status === 'error' || data.status === 'picker') return null;
+                if (data.status === "error" || data.status === "picker") return null;
                 const resultUrl = data.url || data.picker?.[0]?.url;
                 if (resultUrl) {
-                    return { url: resultUrl, title: data.filename || "download", quality: "720" };
+                    return { url: resultUrl, title: data.filename || "download" };
                 }
             }
-        } catch (e) { }
+        } catch {
+            // silent
+        }
         return null;
     };
 
-    // Try v10 (root) first
+    // Try v10 (root endpoint) first
     let result = await attemptFetch(instance, true);
     if (result) return result;
 
-    // Try v7 (/api/json) fallback
-    if (!instance.includes('/api/json')) {
-        const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
+    // Try legacy v7 (/api/json) fallback
+    if (!instance.includes("/api/json")) {
+        const v7Url = instance.endsWith("/")
+            ? `${instance}api/json`
+            : `${instance}/api/json`;
         result = await attemptFetch(v7Url, false);
     }
 
     return result;
 }
 
-async function tryPiped(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string } | null> {
-    const fetchWithProxy = async (url: string) => {
-        try {
-            const res = await fetch(url, {
-                headers: GET_PULSAR_HEADERS(force, incomingUA) as any,
-                signal: AbortSignal.timeout(10000)
-            });
-            if (res.ok) return await res.json();
-
-            // Phase 7: Infinity Bridge Proxy Fallback
-            console.log(`Piped [403/Fail]: Engaging Infinity Proxy for ${instance}...`);
-            for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
-                try {
-                    const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
-                    const pRes = await fetch(proxyUrl, {
-                        headers: GET_PULSAR_HEADERS(force, incomingUA) as any,
-                        signal: AbortSignal.timeout(12000)
-                    });
-                    if (pRes.ok) {
-                        const text = await pRes.text();
-                        const data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
-                        if (data) return data;
-                    }
-                } catch (pe) { }
-            }
-            return null;
-        } catch (e) { return null; }
-    };
-
+// ── Piped API ──
+async function tryPiped(
+    instance: string,
+    videoId: string,
+    type: string,
+): Promise<{ url: string; title: string } | null> {
     try {
-        const data = await fetchWithProxy(`${instance}/streams/${videoId}`);
-        if (!data) return null;
+        const res = await fetch(`${instance}/streams/${videoId}`, {
+            headers: {
+                "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            },
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
 
-        const streams = type === "audio" ? data.audioStreams : data.videoStreams;
+        const streams =
+            type === "audio" ? data.audioStreams : data.videoStreams;
         if (!streams || streams.length === 0) return null;
 
-        const stream = streams.find((s: any) => s.quality === (force ? "1080p" : "720p")) ||
+        const stream =
+            streams.find((s: any) => s.quality === "720p") ||
             streams.find((s: any) => !s.videoOnly) ||
             streams[0];
 
-        if (stream?.url && await verifyUrl(stream.url, force)) {
+        if (stream?.url) {
             return { url: stream.url, title: data.title || "download" };
         }
         return null;
-    } catch (e) { return null; }
+    } catch {
+        return null;
+    }
 }
 
-async function tryInvidious(instance: string, videoId: string, type: string, force: boolean = false, incomingUA?: string): Promise<{ url: string; title: string } | null> {
-    const headers = GET_PULSAR_HEADERS(force, incomingUA);
-    const fetchWithProxy = async (url: string) => {
-        try {
-            const res = await fetch(url, { headers: headers as any, signal: AbortSignal.timeout(8000) });
-            if (res.ok) return await res.json();
-
-            console.log(`Invidious [403/Fail]: Engaging Infinity Proxy for ${instance}...`);
-            for (const proxyBase of PROXY_ROTATION.slice(0, 2)) {
-                try {
-                    const proxyUrl = `${proxyBase}${encodeURIComponent(url)}`;
-                    const pRes = await fetch(proxyUrl, { headers: headers as any, signal: AbortSignal.timeout(10000) });
-                    if (pRes.ok) {
-                        const text = await pRes.text();
-                        const data = proxyBase.includes("allorigins") ? JSON.parse(JSON.parse(text).contents) : JSON.parse(text);
-                        if (data) return data;
-                    }
-                } catch (pe) { }
-            }
-            return null;
-        } catch (e) { return null; }
-    };
-
+// ── Invidious API ──
+async function tryInvidious(
+    instance: string,
+    videoId: string,
+    type: string,
+): Promise<{ url: string; title: string } | null> {
     try {
-        const data = await fetchWithProxy(`${instance}/api/v1/videos/${videoId}?local=true`);
-        if (!data) return null;
+        const res = await fetch(
+            `${instance}/api/v1/videos/${videoId}?local=true`,
+            {
+                headers: {
+                    "User-Agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                },
+                signal: AbortSignal.timeout(8000),
+            },
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
 
         const formats = data.adaptiveFormats || [];
-        const format = type === "audio"
-            ? (formats.find((f: any) => f.type?.includes("audio/webm")) || formats.find((f: any) => f.type?.includes("audio/mp4")) || formats[0])
-            : (formats.find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || formats.find((f: any) => f.type?.includes("video/mp4") && f.encoding?.includes("avc")) || formats[0]);
+        const format =
+            type === "audio"
+                ? formats.find((f: any) => f.type?.includes("audio/webm")) ||
+                formats.find((f: any) => f.type?.includes("audio/mp4")) ||
+                formats[0]
+                : formats.find((f: any) =>
+                    f.qualityLabel?.includes("720"),
+                ) ||
+                formats.find(
+                    (f: any) =>
+                        f.type?.includes("video/mp4") &&
+                        f.encoding?.includes("avc"),
+                ) ||
+                formats[0];
 
-        if (format?.url && await verifyUrl(format.url, force)) {
+        if (format?.url) {
             return { url: format.url, title: data.title || "download" };
         }
         return null;
-    } catch (e) { return null; }
+    } catch {
+        return null;
+    }
 }
 
+// ── youtubei.js extraction (Primary) ──
+async function extractViaYouTubeJS(
+    videoId: string,
+    type: string,
+): Promise<{ url: string; title: string } | null> {
+    try {
+        console.log(`YouTubeJS: Extracting ${type} for ${videoId}...`);
+        const yt = await Innertube.create({
+            retrieve_player: true,
+            generate_session_locally: true,
+        });
 
+        const info = await yt.getBasicInfo(videoId);
+
+        if (!info.streaming_data) {
+            console.log("YouTubeJS: No streaming data available");
+            return null;
+        }
+
+        const allFormats = [
+            ...(info.streaming_data.adaptive_formats || []),
+            ...(info.streaming_data.formats || []),
+        ];
+
+        if (allFormats.length === 0) {
+            console.log("YouTubeJS: No formats found");
+            return null;
+        }
+
+        let chosen: any = null;
+
+        if (type === "audio") {
+            // Prefer audio/mp4, then audio/webm
+            chosen =
+                allFormats.find(
+                    (f: any) =>
+                        f.mime_type?.includes("audio/mp4") && f.url,
+                ) ||
+                allFormats.find(
+                    (f: any) =>
+                        f.mime_type?.includes("audio/webm") && f.url,
+                ) ||
+                allFormats.find(
+                    (f: any) => f.mime_type?.includes("audio") && f.url,
+                );
+        } else {
+            // Prefer 720p mp4, then 480p, then any mp4 with audio
+            chosen =
+                allFormats.find(
+                    (f: any) =>
+                        f.mime_type?.includes("video/mp4") &&
+                        f.quality_label === "720p" &&
+                        f.url,
+                ) ||
+                allFormats.find(
+                    (f: any) =>
+                        f.mime_type?.includes("video/mp4") &&
+                        f.quality_label === "480p" &&
+                        f.url,
+                ) ||
+                allFormats.find(
+                    (f: any) =>
+                        f.mime_type?.includes("video/mp4") &&
+                        f.has_audio &&
+                        f.url,
+                ) ||
+                allFormats.find(
+                    (f: any) =>
+                        f.mime_type?.includes("video/mp4") && f.url,
+                ) ||
+                allFormats.find(
+                    (f: any) => f.mime_type?.includes("video") && f.url,
+                );
+        }
+
+        if (chosen?.url) {
+            const title =
+                info.basic_info?.title || "download";
+            console.log(
+                `YouTubeJS: SUCCESS — found ${type} (${chosen.quality_label || chosen.bitrate || "?"})`,
+            );
+            return { url: chosen.url, title };
+        }
+
+        // If formats exist but need decipher, try getting the decipher URL
+        if (allFormats.length > 0) {
+            console.log("YouTubeJS: Formats found but no direct URL, trying decipher...");
+            const format = type === "audio"
+                ? allFormats.find((f: any) => f.mime_type?.includes("audio"))
+                : allFormats.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "720p")
+                || allFormats.find((f: any) => f.mime_type?.includes("video/mp4"));
+
+            if (format) {
+                try {
+                    const decipheredUrl = format.decipher ? await format.decipher(yt.session?.player) : null;
+                    if (decipheredUrl) {
+                        console.log("YouTubeJS: Decipher SUCCESS");
+                        return { url: decipheredUrl, title: info.basic_info?.title || "download" };
+                    }
+                } catch (decipherErr) {
+                    console.log("YouTubeJS: Decipher failed:", decipherErr);
+                }
+            }
+        }
+
+        console.log("YouTubeJS: No suitable format found");
+        return null;
+    } catch (e: any) {
+        console.error("YouTubeJS error:", e?.message || e);
+        return null;
+    }
+}
+
+// ── Main Route Handler ──
 export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const videoId = searchParams.get("id");
     const type = searchParams.get("type") || "both";
-    const action = searchParams.get("action");
-    const discoveryMode = action === "discovery";
-    const force = searchParams.get("force") === "true" || discoveryMode; // Auto-Force for discovery
     const pipe = searchParams.get("pipe") === "true";
     const getUrl = searchParams.get("get_url") === "true";
-    const skipProbe = searchParams.get("skip_probe") === "true";
+    const force = searchParams.get("force") === "true";
     const directUrl = searchParams.get("direct_url");
+    const action = searchParams.get("action");
 
-    if (!videoId && !action && !directUrl) return NextResponse.json({ error: "Missing video ID or Action" }, { status: 400 });
+    if (!videoId && !action && !directUrl)
+        return NextResponse.json(
+            { error: "Missing video ID" },
+            { status: 400 },
+        );
 
-    const incomingUA = request.headers.get("X-Pulsar-Agent") || undefined;
-
-    // Background STS sync
-    SYNC_STS();
-
-    // V27: Chronos Engine Action Bridge
-    if (action === "decipher") {
-        const cipher = searchParams.get("cipher");
-        if (!cipher) return NextResponse.json({ error: "Missing Cipher" }, { status: 400 });
-
-        // Phase 19: Relayed Deciphering (Mimicking High-Trust Environment)
-        // For now, we relay this to a high-scale deciphering bridge or handle it via TV-mimicry
-        // If we have a cipher, it means the URL is encrypted. 
-        // We can often extract the URL and signature components from the cipher string.
-        const params = new URLSearchParams(cipher);
-        const url = params.get("url");
-        const sig = params.get("s");
-        const sp = params.get("sp") || "sig";
-
-        if (url && sig) {
-            // This is a placeholder for the actual deciphering logic (swap/reverse/slice)
-            // In TV clients, signatureCipher is rare. In Web/Mobile, it's common.
-            // We return a 'needs_tv' signal to the frontend to force TV-Spear if cipher is detected.
-            return NextResponse.json({ url: `${url}&${sp}=${sig}`, warning: "Partial Decipher" });
-        }
-        return NextResponse.json({ error: "Decipher Failed" }, { status: 500 });
-    }
-
-    if (action === "sts") {
-        const sts = await SYNC_STS();
-        return NextResponse.json({ sts });
-    }
+    // ── Action handlers ──
     if (action === "proxy") {
         const targetUrl = searchParams.get("url");
-        if (!targetUrl) return NextResponse.json({ error: "Missing Target URL" }, { status: 400 });
-
+        if (!targetUrl)
+            return NextResponse.json(
+                { error: "Missing URL" },
+                { status: 400 },
+            );
         try {
-            const h = GET_PULSAR_HEADERS(force, incomingUA);
-            // Phase 18: Robust Body Cloning for InnerTube/Mirror relays
-            let body = undefined;
-            const isPost = targetUrl.includes("youtubei") || targetUrl.includes("api/json");
-            if (isPost) {
-                body = await request.clone().text();
-            }
-
             const proxyRes = await fetch(targetUrl, {
-                method: isPost ? "POST" : "GET",
-                headers: h as any,
-                body,
+                headers: {
+                    "User-Agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                },
                 signal: AbortSignal.timeout(15000),
-                duplex: body ? 'half' : undefined
-            } as any);
-
+            });
             const data = await proxyRes.text();
             return new NextResponse(data, {
                 status: proxyRes.status,
-                headers: { "Content-Type": proxyRes.headers.get("Content-Type") || "application/json" }
+                headers: {
+                    "Content-Type":
+                        proxyRes.headers.get("Content-Type") ||
+                        "application/json",
+                },
             });
-        } catch (e) {
-            return NextResponse.json({ error: "Relay Failed" }, { status: 500 });
+        } catch {
+            return NextResponse.json(
+                { error: "Proxy failed" },
+                { status: 500 },
+            );
         }
     }
 
-    const shouldProbe = pipe || getUrl;
+    const shouldPipe = pipe || getUrl;
 
-    if (shouldProbe) {
-        if (!videoId && !directUrl) return NextResponse.json({ error: "Missing ID for piping" }, { status: 400 });
+    if (shouldPipe) {
+        if (!videoId && !directUrl)
+            return NextResponse.json(
+                { error: "Missing ID for piping" },
+                { status: 400 },
+            );
+
         try {
-            console.log(`Pulsar-Core Bridging: ${videoId || 'Direct'} (${type}) [SkipProbe: ${skipProbe}, DirectURL: ${!!directUrl}]`);
+            console.log(
+                `Download: ${videoId || "Direct"} (${type}) [Direct: ${!!directUrl}]`,
+            );
 
-            // === PHASE 0: Direct URL Proxy (fastest - reuses already-discovered URL) ===
+            // ── PHASE 0: Direct URL proxy ──
             if (directUrl) {
-                console.log("Pulsar: Direct URL proxy mode for:", directUrl.substring(0, 50) + "...");
-
-                // Only send YouTube headers if it's a Google Video link
+                console.log("Phase 0: Direct URL proxy...");
                 const isGoogle = directUrl.includes("googlevideo.com");
-                const headers = isGoogle
-                    ? { ...GET_PULSAR_HEADERS(true, incomingUA), "Range": "bytes=0-", "Connection": "keep-alive" }
-                    : {
-                        "User-Agent": incomingUA || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "*/*",
-                        "Range": "bytes=0-",
-                        "Connection": "keep-alive"
-                    };
+                const headers: Record<string, string> = {
+                    "User-Agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    Accept: "*/*",
+                    Range: "bytes=0-",
+                    Connection: "keep-alive",
+                };
+                if (isGoogle) {
+                    headers["Origin"] = "https://www.youtube.com";
+                    headers["Referer"] = "https://www.youtube.com/";
+                }
 
                 const streamResponse = await fetch(directUrl, {
                     headers,
-                    signal: AbortSignal.timeout(30000)
+                    signal: AbortSignal.timeout(30000),
                 });
 
                 if (streamResponse.ok) {
-                    const finalHeaders = new Headers();
-                    finalHeaders.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
-                    finalHeaders.set("Content-Disposition", `attachment; filename="download.${type === "audio" ? "m4a" : "mp4"}"`);
-                    if (streamResponse.headers.get("Content-Length")) finalHeaders.set("Content-Length", streamResponse.headers.get("Content-Length")!);
-                    finalHeaders.set("Accept-Ranges", "bytes");
-                    finalHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
-                    finalHeaders.set("X-Pulsar-Core", "direct");
-                    return new NextResponse(streamResponse.body, { headers: finalHeaders });
+                    const h = new Headers();
+                    h.set(
+                        "Content-Type",
+                        streamResponse.headers.get("Content-Type") ||
+                        (type === "audio" ? "audio/mp4" : "video/mp4"),
+                    );
+                    h.set(
+                        "Content-Disposition",
+                        `attachment; filename="download.${type === "audio" ? "m4a" : "mp4"}"`,
+                    );
+                    if (streamResponse.headers.get("Content-Length"))
+                        h.set(
+                            "Content-Length",
+                            streamResponse.headers.get("Content-Length")!,
+                        );
+                    h.set("Accept-Ranges", "bytes");
+                    h.set("Cache-Control", "no-cache, no-store, must-revalidate");
+                    return new NextResponse(streamResponse.body, { headers: h });
                 }
-                console.warn(`Pulsar: Direct URL proxy failed (${streamResponse.status}), continuing with discovery...`);
+                console.warn(`Phase 0: Direct URL failed (${streamResponse.status})`);
             }
 
             let result: { url: string; title: string } | null = null;
 
-            // === PHASE 0: Direct InnerTube Extraction (Most Reliable) ===
+            // ── PHASE 1: youtubei.js extraction (most reliable) ──
             if (videoId) {
-                console.log("Phase 0: InnerTube direct extraction...");
-                result = await extractViaInnerTube(videoId, type === "audio" ? "audio" : "video");
+                console.log("Phase 1: youtubei.js extraction...");
+                result = await extractViaYouTubeJS(
+                    videoId,
+                    type === "audio" ? "audio" : "video",
+                );
             }
 
-            // === PHASE 1: Try Fleet (Hyper-Bridge V10 Turbo) ===
-            if (!result && !skipProbe) {
-                const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-                const batchSize = 25;
-                const limit = 400;
-
-                for (let i = 0; i < fullFleet.length; i += batchSize) {
-                    if (i > limit) break;
-                    const batch = fullFleet.slice(i, i + batchSize);
-                    const results = await Promise.all(batch.map(instance => {
-                        const t = type === "audio" ? "audio" : "video";
-                        if (instance.includes("cobalt")) return tryCobalt(instance, videoId || "", t, true, incomingUA);
-                        if (instance.includes("piped")) return tryPiped(instance, videoId || "", t, true, incomingUA);
-                        return tryInvidious(instance, videoId || "", t, true, incomingUA);
-                    }));
-                    const found = results.find(res => res !== null);
-                    if (found) { result = found; break; }
+            // ── PHASE 2: Cobalt fleet ──
+            if (!result && videoId) {
+                console.log("Phase 2: Cobalt fleet...");
+                for (const instance of COBALT_INSTANCES) {
+                    result = await tryCobalt(
+                        instance,
+                        videoId,
+                        type === "audio" ? "audio" : "video",
+                    );
+                    if (result) {
+                        console.log(`Phase 2: Cobalt success via ${instance}`);
+                        break;
+                    }
                 }
             }
 
-            // === PHASE 1.5: Local Proton Core (YTDL Native Fallback) ===
-            // If the fleet failed, use the server's own IP to resolve the video
+            // ── PHASE 3: Piped fleet ──
             if (!result && videoId) {
-                try {
-                    console.log("Pulsar: Fleet failed, engaging Proton Core (YTDL)...");
-                    // ytdl is already imported at the top
-                    const info = await ytdl.getInfo(videoId);
-                    const format = type === "audio"
-                        ? ytdl.chooseFormat(info.formats, { quality: "highestaudio", filter: "audioonly" })
-                        : ytdl.chooseFormat(info.formats, { quality: "highestvideo", filter: (format: any) => format.container === 'mp4' });
-
-                    if (format && format.url) {
-                        result = {
-                            url: format.url,
-                            title: info.videoDetails.title || "download"
-                        };
+                console.log("Phase 3: Piped fleet...");
+                const shuffled = [...PIPED_INSTANCES].sort(
+                    () => Math.random() - 0.5,
+                );
+                for (const instance of shuffled.slice(0, 5)) {
+                    result = await tryPiped(
+                        instance,
+                        videoId,
+                        type === "audio" ? "audio" : "video",
+                    );
+                    if (result) {
+                        console.log(`Phase 3: Piped success via ${instance}`);
+                        break;
                     }
-                } catch (e) { console.error("Proton Core failed:", e); }
+                }
             }
 
-            // === NEW: Server-Assisted Discovery Mode ===
-            // Return the URL to the client instead of proxying
+            // ── PHASE 4: Invidious fleet ──
+            if (!result && videoId) {
+                console.log("Phase 4: Invidious fleet...");
+                for (const instance of INVIDIOUS_INSTANCES) {
+                    result = await tryInvidious(
+                        instance,
+                        videoId,
+                        type === "audio" ? "audio" : "video",
+                    );
+                    if (result) {
+                        console.log(`Phase 4: Invidious success via ${instance}`);
+                        break;
+                    }
+                }
+            }
+
+            // Return URL if get_url mode
             if (getUrl && result?.url) {
                 return NextResponse.json({
                     url: result.url,
                     title: result.title || "download",
-                    filename: `${(result.title || "download").replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}`
+                    filename: `${(result.title || "download").replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}`,
                 });
             }
 
-            // === PHASE 2: Try streaming the Fleet result ===
-            if (result?.url) {
-                try {
-                    const streamResponse = await fetch(result.url, {
-                        headers: { ...GET_PULSAR_HEADERS(true, incomingUA), "Range": "bytes=0-", "Connection": "keep-alive" },
-                        signal: AbortSignal.timeout(30000)
-                    });
-                    if (streamResponse.ok) {
-                        const headers = new Headers();
-                        headers.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
-                        headers.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
-                        if (streamResponse.headers.get("Content-Length")) headers.set("Content-Length", streamResponse.headers.get("Content-Length")!);
-                        headers.set("Accept-Ranges", "bytes");
-                        headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-                        headers.set("X-Pulsar-Core", "fleet");
-                        return new NextResponse(streamResponse.body, { headers });
-                    }
-                    console.warn("Pulsar: Fleet stream HTTP error, falling back to YTDL...");
-                } catch (streamErr) {
-                    console.warn("Pulsar: Fleet stream failed, falling back to YTDL...", streamErr);
-                }
-                result = null; // Clear so YTDL takes over
-            }
+            if (!result?.url) throw new Error("All extraction methods failed");
 
-            // === PHASE 3: YTDL Fallback (InnerTube) ===
-            if (!result?.url) {
-                console.log("Pulsar: Engaging YTDL InnerTube extraction...");
-                try {
-                    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                        requestOptions: { headers: GET_PULSAR_HEADERS(true) }
-                    });
-                    const format = type === "audio"
-                        ? ytdl.filterFormats(info.formats, "audioonly")[0]
-                        : ytdl.filterFormats(info.formats, "videoandaudio")[0];
-                    if (format?.url) result = { url: format.url, title: info.videoDetails.title };
-                } catch (ytdlErr) {
-                    console.error("YTDL Phase 3 failed:", ytdlErr);
-                }
-            }
-
-            if (!result?.url) throw new Error("Pulsar-Core: All extraction methods failed");
-
-            // === PHASE 4: Stream the YTDL result ===
+            // ── Stream the result ──
+            console.log("Streaming result...");
             const streamResponse = await fetch(result.url, {
-                headers: { ...GET_PULSAR_HEADERS(true), "Range": "bytes=0-", "Connection": "keep-alive" }
+                headers: {
+                    "User-Agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    Range: "bytes=0-",
+                    Connection: "keep-alive",
+                    Origin: "https://www.youtube.com",
+                    Referer: "https://www.youtube.com/",
+                },
+                signal: AbortSignal.timeout(30000),
             });
-            if (!streamResponse.ok) throw new Error(`Pulsar: YTDL stream failed with ${streamResponse.status}`);
 
-            const headers = new Headers();
-            headers.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
-            headers.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
-            if (streamResponse.headers.get("Content-Length")) headers.set("Content-Length", streamResponse.headers.get("Content-Length")!);
-            headers.set("Accept-Ranges", "bytes");
-            headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
-            headers.set("X-Pulsar-Core", "ytdl");
-            return new NextResponse(streamResponse.body, { headers });
+            if (!streamResponse.ok)
+                throw new Error(`Stream failed: ${streamResponse.status}`);
+
+            const h = new Headers();
+            h.set(
+                "Content-Type",
+                streamResponse.headers.get("Content-Type") ||
+                (type === "audio" ? "audio/mp4" : "video/mp4"),
+            );
+            h.set(
+                "Content-Disposition",
+                `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`,
+            );
+            if (streamResponse.headers.get("Content-Length"))
+                h.set(
+                    "Content-Length",
+                    streamResponse.headers.get("Content-Length")!,
+                );
+            h.set("Accept-Ranges", "bytes");
+            h.set("Cache-Control", "no-cache, no-store, must-revalidate");
+
+            return new NextResponse(streamResponse.body, { headers: h });
         } catch (e: any) {
-            console.error("Pulsar-Core Interrupted:", e);
-            return NextResponse.json({ error: `Download failed: ${e?.message || "All extraction methods exhausted"}. Try again or use cobalt.tools directly.` }, { status: 500 });
+            console.error("Download error:", e);
+            return NextResponse.json(
+                {
+                    error: `Download failed: ${e?.message || "All extraction methods exhausted"}`,
+                },
+                { status: 500 },
+            );
         }
     }
 
-    console.log(`V23 Pulsar-Core Probe: ${videoId} (Force: ${force})`);
-
+    // ── Non-pipe mode: return URLs ──
     const probeType = async (t: string) => {
-        let result;
-        // Layer 1: Pulsar Human Simulation (InnerTube + Curated PoToken)
-        try {
-            const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-                requestOptions: { headers: GET_PULSAR_HEADERS(force) }
-            });
-            const formatSelection = t === "audio"
-                ? ytdl.filterFormats(info.formats, "audioonly").find((f: any) => f.mimeType?.includes("mp4")) || ytdl.filterFormats(info.formats, "audioonly")[0]
-                : ytdl.filterFormats(info.formats, "videoandaudio").find((f: any) => f.qualityLabel?.includes(force ? "1080" : "720")) || ytdl.filterFormats(info.formats, "videoandaudio")[0];
+        // Try youtubei.js first
+        let result = await extractViaYouTubeJS(videoId!, t);
+        if (result) return result;
 
-            if (formatSelection?.url && await verifyUrl(formatSelection.url, force)) {
-                result = { url: formatSelection.url, title: info.videoDetails?.title || "download" };
-            }
-        } catch (e) { }
-
-        // Layer 2: Nebula Fleet Shotgun
-        if (!result) {
-            const fullFleet = [...COBALT_INSTANCES, ...PROXY_INSTANCES].sort(() => Math.random() - 0.5);
-            const batchSize = force ? 20 : 10;
-            const limit = force ? 200 : 80;
-
-            for (let i = 0; i < fullFleet.length; i += batchSize) {
-                if (i > limit) break;
-                const batch = fullFleet.slice(i, i + batchSize);
-                const results = await Promise.all(batch.map(instance => {
-                    if (instance.includes("cobalt")) return tryCobalt(instance, videoId || "", t, force);
-                    if (instance.includes("piped")) return tryPiped(instance, videoId || "", t, force);
-                    return tryInvidious(instance, videoId || "", t, force);
-                }));
-                result = results.find(r => r !== null);
-                if (result) break;
-            }
+        // Then Cobalt
+        for (const instance of COBALT_INSTANCES) {
+            result = await tryCobalt(instance, videoId!, t);
+            if (result) return result;
         }
-        return result;
+
+        // Then Piped
+        const shuffledPiped = [...PIPED_INSTANCES].sort(() => Math.random() - 0.5);
+        for (const instance of shuffledPiped.slice(0, 5)) {
+            result = await tryPiped(instance, videoId!, t);
+            if (result) return result;
+        }
+
+        // Then Invidious
+        for (const instance of INVIDIOUS_INSTANCES) {
+            result = await tryInvidious(instance, videoId!, t);
+            if (result) return result;
+        }
+
+        return null;
     };
 
-    // === PHASE 6: Deep Pulse Discovery ===
-    if (discoveryMode) {
-        console.log(`Deep Pulse [Force]: Finding links for ${videoId} (${type})...`);
+    if (type === "both") {
         const [audio, video] = await Promise.all([
-            (type === "audio" || type === "both") ? probeType("audio") : Promise.resolve(null),
-            (type === "video" || type === "both") ? probeType("video") : Promise.resolve(null)
+            probeType("audio"),
+            probeType("video"),
         ]);
 
-        return NextResponse.json({
-            audio: audio?.url || null,
-            video: video?.url || null,
-            title: audio?.title || video?.title || "download",
-            status: (audio || video) ? "found" : "failed",
-            engine: "DeepPulse V6"
-        });
-    }
-
-    if (type === "both") {
-        const [audio, video] = await Promise.all([probeType("audio"), probeType("video")]);
-        const bestNodes = STABLE_FALLBACKS.sort(() => Math.random() - 0.5);
-        const fallbackUrl = `${bestNodes[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+        const fallbackUrl = `${STABLE_FALLBACKS[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
 
         return NextResponse.json({
-            audio: audio ? { url: audio.url, filename: `${audio.title}.m4a` } : null,
-            video: video ? { url: video.url, filename: `${video.title}.mp4` } : null,
+            audio: audio
+                ? { url: audio.url, filename: `${audio.title}.m4a` }
+                : null,
+            video: video
+                ? { url: video.url, filename: `${video.title}.mp4` }
+                : null,
             fallbackUrl,
-            status: (audio || video) ? "ready" : "fallback_required",
-            ghostProtocolEnabled: true
+            status: audio || video ? "ready" : "fallback_required",
         });
     }
 
     const result = await probeType(type);
     if (result) {
-        const resultObj = { url: result.url, filename: `${result.title}.${type === "audio" ? "m4a" : "mp4"}` };
         return NextResponse.json({
-            audio: type === "audio" ? resultObj : null,
-            video: type === "video" ? resultObj : null,
+            audio:
+                type === "audio"
+                    ? {
+                        url: result.url,
+                        filename: `${result.title}.m4a`,
+                    }
+                    : null,
+            video:
+                type === "video"
+                    ? {
+                        url: result.url,
+                        filename: `${result.title}.mp4`,
+                    }
+                    : null,
             fallbackUrl: `${STABLE_FALLBACKS[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
             status: "ready",
-            ghostProtocolEnabled: true
         });
     }
 
-    // Capture logs function
-    const logs: string[] = [];
-    const log = (msg: string) => { console.log(msg); logs.push(msg); };
-
-    // ... (Use 'log' instead of 'console.log' throughout the function - wait, replacing all console.logs is hard with replace_file_content)
-    // Instead, I'll just change the final error response to include specific failure details if possible.
-    // Actually, I can wrap the main logic in a try/catch and append the error stack/message.
-
-    // Changing the final error response:
-    return NextResponse.json({
-        audio: null,
-        video: null,
-        error: `Pulsar-Core Handshake failed. Server Logs: ${logs.join(' | ')}`, // This won't work unless I populate `logs`.
-        fallbackUrl: `${STABLE_FALLBACKS[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
-        ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`,
-        ghostProtocolEnabled: true,
-        status: "fallback_required"
-    }, { status: 500 });
+    return NextResponse.json(
+        {
+            audio: null,
+            video: null,
+            error: "All extraction methods failed",
+            fallbackUrl: `${STABLE_FALLBACKS[0]}/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`,
+            ghostProtocolUrl: `/api/download?id=${videoId}&type=${type}&pipe=true`,
+            status: "fallback_required",
+        },
+        { status: 500 },
+    );
 }
 
-// Phase 12: Mirror Handshake (Allow POST for Cobalt/Piped Proxies)
+// Allow POST requests
 export async function POST(request: NextRequest) {
     return GET(request);
 }

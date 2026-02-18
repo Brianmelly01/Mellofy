@@ -13,14 +13,9 @@ export const INVIDIOUS_NODES = [
 ];
 
 export const COBALT_NODES = [
-    "https://cobalt-api.meowing.de",
     "https://cobalt-backend.canine.tools",
-    "https://kityune.imput.net",
-    "https://nachos.imput.net",
-    "https://sunny.imput.net",
-    "https://blossom.imput.net",
+    "https://cobalt-api.meowing.de",
     "https://capi.3kh0.net",
-    "https://downloadapi.stuff.solutions",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
