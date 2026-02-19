@@ -88,7 +88,14 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 let apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
 
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`Server extraction failed (${response.status})`);
+                if (!response.ok) {
+                    let serverError = `Server extraction failed (${response.status})`;
+                    try {
+                        const errBody = await response.json();
+                        if (errBody.error) serverError = errBody.error;
+                    } catch { /* ignore parse errors */ }
+                    throw new Error(serverError);
+                }
 
                 const reader = response.body?.getReader();
                 if (!reader) throw new Error("Stream not available");
