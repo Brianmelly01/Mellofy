@@ -4,25 +4,33 @@ import Innertube, { UniversalCache } from "youtubei.js";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// ── Cobalt instances verified for YouTube (instances.cobalt.best/service/youtube) ──
+// ── Cobalt instances (Refreshed 2026) ──
 const COBALT_INSTANCES = [
-    "https://cobalt-backend.canine.tools",
+    "https://api.cobalt.tools",    // Main (often has Turnstile)
+    "https://co.wuk.sh",           // Alias
+    "https://cobalt-backend.canine.tools", // Checked: requires JWT but maybe not for all?
     "https://cobalt-api.meowing.de",
     "https://capi.3kh0.net",
+    "https://cobalt.canine.tools",
+    "https://api.cobalt.canine.tools",
 ];
 
-// Piped API instances
+// Piped API instances (CORS-friendly often)
 const PIPED_INSTANCES = [
-    "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
-    "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
-    "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
-    "https://api.piped.yt", "https://pipedapi.r4fo.com",
-    "https://pipedapi.colinslegacy.com", "https://pipedapi.rivo.lol",
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.mha.fi",
+    "https://pipedapi.leptons.xyz",
+    "https://pipedapi.colinslegacy.com",
+    "https://api.piped.yt",
 ];
 
-// Invidious instances (last resort)
+// Invidious instances
 const INVIDIOUS_INSTANCES = [
-    "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
+    "https://yewtu.be",
+    "https://inv.nadeko.net",
+    "https://invidious.nerdvpn.de",
+    "https://inv.zzls.xyz",
 ];
 
 const STABLE_FALLBACKS = [
@@ -39,58 +47,73 @@ async function tryCobalt(
     const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
     const attemptFetch = async (endpoint: string, isV10: boolean) => {
-        try {
-            const payload = isV10
-                ? {
-                    url: targetUrl,
-                    videoQuality: "720",
-                    downloadMode: type === "audio" ? "audio" : "auto",
-                    youtubeVideoCodec: "h264",
-                }
-                : {
-                    url: targetUrl,
-                    vCodec: "h264",
-                    vQuality: "720",
-                    isAudioOnly: type === "audio",
-                };
-
-            const res = await fetch(endpoint, {
-                method: "POST",
-                headers: {
-                    Accept: "application/json",
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-                signal: AbortSignal.timeout(10000),
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                if (data.status === "error" || data.status === "picker") return null;
-                const resultUrl = data.url || data.picker?.[0]?.url;
-                if (resultUrl) {
-                    return { url: resultUrl, title: data.filename || "download" };
-                }
+        const payload = isV10
+            ? {
+                url: targetUrl,
+                videoQuality: "720",
+                downloadMode: type === "audio" ? "audio" : "auto",
+                youtubeVideoCodec: "h264",
             }
-        } catch {
-            // silent
+            : {
+                url: targetUrl,
+                vCodec: "h264",
+                vQuality: "720",
+                isAudioOnly: type === "audio",
+            };
+
+        const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+                "Origin": "https://cobalt.tools", // Some instances check origin
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000),
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            if (data.status === "error" || data.status === "picker") {
+                const errorInfo = data.error?.code || data.status;
+                throw new Error(`${endpoint}: Cobalt error: ${errorInfo}`);
+            }
+            const resultUrl = data.url || data.picker?.[0]?.url;
+            if (resultUrl) {
+                return { url: resultUrl, title: data.filename || "download" };
+            }
+        } else {
+            const text = await res.text().catch(() => "N/A");
+            throw new Error(`${endpoint}: HTTP ${res.status}: ${text.substring(0, 100)}`);
         }
         return null;
     };
 
     // Try v10 (root endpoint) first
-    let result = await attemptFetch(instance, true);
-    if (result) return result;
+    try {
+        let result = await attemptFetch(instance, true);
+        if (result) return result;
+    } catch (e: any) {
+        // Log individual instance failure but continue
+        console.warn(e.message);
+        // If it's a JWT error, don't bother with v7
+        if (e.message.includes("jwt")) throw e;
+    }
 
     // Try legacy v7 (/api/json) fallback
     if (!instance.includes("/api/json")) {
         const v7Url = instance.endsWith("/")
             ? `${instance}api/json`
             : `${instance}/api/json`;
-        result = await attemptFetch(v7Url, false);
+        try {
+            return await attemptFetch(v7Url, false);
+        } catch (e: any) {
+            throw e;
+        }
     }
 
-    return result;
+    return null;
 }
 
 // ── Piped API ──
@@ -99,33 +122,35 @@ async function tryPiped(
     videoId: string,
     type: string,
 ): Promise<{ url: string; title: string } | null> {
-    try {
-        const res = await fetch(`${instance}/streams/${videoId}`, {
-            headers: {
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            },
-            signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
+    const res = await fetch(`${instance}/streams/${videoId}`, {
+        headers: {
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        },
+        signal: AbortSignal.timeout(10000),
+    });
 
-        const streams =
-            type === "audio" ? data.audioStreams : data.videoStreams;
-        if (!streams || streams.length === 0) return null;
-
-        const stream =
-            streams.find((s: any) => s.quality === "720p") ||
-            streams.find((s: any) => !s.videoOnly) ||
-            streams[0];
-
-        if (stream?.url) {
-            return { url: stream.url, title: data.title || "download" };
-        }
-        return null;
-    } catch {
-        return null;
+    if (!res.ok) {
+        const text = await res.text().catch(() => "N/A");
+        throw new Error(`${instance}: HTTP ${res.status}: ${text.substring(0, 50)}`);
     }
+
+    const data = await res.json();
+    const streams = type === "audio" ? data.audioStreams : data.videoStreams;
+
+    if (!streams || streams.length === 0) {
+        throw new Error(`${instance}: No ${type} streams found (Datacenter block?)`);
+    }
+
+    const stream =
+        streams.find((s: any) => s.quality === "720p") ||
+        streams.find((s: any) => !s.videoOnly) ||
+        streams[0];
+
+    if (stream?.url) {
+        return { url: stream.url, title: data.title || "download" };
+    }
+    throw new Error(`${instance}: Found streams but no URL`);
 }
 
 // ── Invidious API ──
@@ -145,7 +170,12 @@ async function tryInvidious(
                 signal: AbortSignal.timeout(8000),
             },
         );
-        if (!res.ok) return null;
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "N/A");
+            throw new Error(`${instance}: HTTP ${res.status}: ${text.substring(0, 50)}`);
+        }
+
         const data = await res.json();
 
         const formats = data.adaptiveFormats || [];
@@ -167,13 +197,12 @@ async function tryInvidious(
         if (format?.url) {
             return { url: format.url, title: data.title || "download" };
         }
-        return null;
-    } catch {
-        return null;
+        throw new Error(`${instance}: No stream URL found in metadata`);
+    } catch (e: any) {
+        throw e;
     }
 }
 
-// ── youtubei.js extraction (Primary) ──
 // ── youtubei.js extraction (Primary) ──
 async function extractViaYouTubeJS(
     videoId: string,
