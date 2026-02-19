@@ -1,29 +1,28 @@
 
-// V5 EXTREME RESILIENCE — 30+ Global Nodes
+// V6 DEEP SWARM — Verified nodes from instances.cobalt.best (Feb 2026)
 export const PIPED_NODES = [
     "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
     "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
     "https://api.piped.yt", "https://pipedapi.r4fo.com",
     "https://pipedapi.rivo.lol", "https://pipedapi.projectsegfau.lt",
-    "https://pipedapi.in.projectsegfau.lt", "https://pipedapi.us.projectsegfau.lt",
     "https://pipedapi.drgns.space", "https://pipedapi.official-halit.de",
-    "https://pipedapi.moe.moe", "https://pipedapi.priv.au",
+    "https://pipedapi.moe.moe", "https://pipedapi.tokyo.moe",
 ];
 
 export const INVIDIOUS_NODES = [
     "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
     "https://iv.melmac.space", "https://invidious.no-logs.com", "https://inv.riverside.rocks",
-    "https://invidio.xamh.de", "https://invidious.namazso.eu",
 ];
 
 export const COBALT_NODES = [
-    "https://co.wuk.sh",
-    "https://api.cobalt.tools",
-    "https://cobalt-backend.canine.tools",
-    "https://cobalt-api.meowing.de",
-    "https://cobalt.hyonsu.com",
-    "https://co.darkness.services",
+    "https://cobalt-api.meowing.de",      // 92% Health
+    "https://cobalt-backend.canine.tools", // 88% Health
+    "https://kityune.imput.net",          // 80% Health
+    "https://blossom.imput.net",          // 80% Health
+    "https://nachos.imput.net",           // 76% Health
+    "https://sunny.imput.net",            // 76% Health
+    "https://capi.3kh0.net",              // 72% Health
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
@@ -129,7 +128,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     try {
-        log(`Resilience Overload 5.0 for ${videoId} (${type})...`);
+        log(`Deep Swarm 6.0 for ${videoId} (${type})...`);
         const wrapToReject = async (p: Promise<string | null>) => {
             const res = await p;
             if (!res) throw new Error("Fail");
@@ -138,8 +137,8 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
 
         const strategies = [
             ...COBALT_NODES.map(n => wrapToReject(probeCobalt(n))),
-            ...PIPED_NODES.slice(0, 12).map(n => wrapToReject(probePiped(n))),
-            ...INVIDIOUS_NODES.slice(0, 6).map(n => wrapToReject(probeInvidious(n)))
+            ...PIPED_NODES.slice(0, 10).map(n => wrapToReject(probePiped(n))),
+            ...INVIDIOUS_NODES.slice(0, 5).map(n => wrapToReject(probeInvidious(n)))
         ];
 
         try {
@@ -147,12 +146,13 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             log("Swarm success!");
             return { url: firstSuccess, logs };
         } catch (e) {
-            log("All swarm strategies (30+ nodes) failed.");
+            log("Deep swarm exhausted all nodes.");
         }
     } catch (err: any) {
-        log(`Probe crash: ${err.message}`);
+        log(`Swarm crash: ${err.message}`);
     }
 
     return { url: null, logs };
 };
+
 
