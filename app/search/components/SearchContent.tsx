@@ -154,7 +154,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 ? "YouTube has blocked automated extraction for this video on our servers."
                 : `Download failed: ${err.message?.split('|')[0].trim()}`;
 
-            const cobaltUrl = `https://cobalt.tools`;
+            const cobaltUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${track.id}`;
             const confirmMsg = `${friendlyMsg}\n\nOur "Ghost Protocol" fallback also failed. Would you like to use cobalt.tools to download manually?`;
 
             if (confirm(confirmMsg)) {

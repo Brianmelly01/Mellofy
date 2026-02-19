@@ -6,16 +6,20 @@ export const PIPED_NODES = [
     "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
     "https://api.piped.yt", "https://pipedapi.r4fo.com",
     "https://pipedapi.colinslegacy.com", "https://pipedapi.rivo.lol",
+    "https://pipedapi.drgns.space", "https://pipedapi.projectsegfau.lt",
 ];
 
 export const INVIDIOUS_NODES = [
     "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
+    "https://invidious.no-logs.com", "https://inv.riverside.rocks", "https://invidious.snopyta.org",
 ];
 
 export const COBALT_NODES = [
     "https://co.wuk.sh",
     "https://api.cobalt.tools",
-    // Backend nodes usually require JWT now, so we skip them to save time
+    "https://cobalt-backend.canine.tools", // Sometimes works for client-side
+    "https://cobalt-api.meowing.de",
+    "https://capi.3kh0.net",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
@@ -44,41 +48,52 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
             (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
         ];
-        // We deterministicly pick for a node so it's consistent if retried
-        const index = url.length % proxies.length;
+        // Use a different proxy based on URL to avoid multi-hitting same rate limit
+        const index = Math.abs(url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % proxies.length;
         return proxies[index](url);
     };
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
-        const tryEndpoint = async (endpoint: string, useProxy: boolean = false) => {
+        const tryEndpoint = async (endpoint: string, isV7: boolean, useProxy: boolean = false) => {
             try {
                 const targetUrl = useProxy ? wrapCORS(endpoint) : endpoint;
+                const payload = isV7 ? {
+                    url: `https://youtube.com/watch?v=${videoId}`,
+                    vCodec: 'h264', vQuality: '720', isAudioOnly: type === 'audio',
+                } : {
+                    url: `https://youtube.com/watch?v=${videoId}`,
+                    downloadMode: type === 'audio' ? 'audio' : 'auto',
+                    videoQuality: '720',
+                };
+
                 const res = await fetchWithTimeout(targetUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify({
-                        url: `https://youtube.com/watch?v=${videoId}`,
-                        downloadMode: type === 'audio' ? 'audio' : 'auto',
-                        videoQuality: '720',
-                    }),
+                    body: JSON.stringify(payload),
                     mode: "cors",
                 }, useProxy ? 10000 : 5000);
 
                 if (res.ok) {
                     const d = await res.json();
-                    if (d.url || d.picker?.[0]?.url) {
-                        log(`${instance} SUCCESS`);
-                        return d.url || d.picker?.[0]?.url;
+                    const resUrl = d.url || d.picker?.[0]?.url;
+                    if (resUrl) {
+                        log(`${instance} (${isV7 ? 'v7' : 'v10'}) SUCCESS`);
+                        return resUrl;
                     }
-                    log(`${instance} Error: ${d.error?.code || d.status}`);
                 }
-            } catch (e: any) {
-                log(`${instance} Failed: ${e.message || 'CORS'}`);
-            }
+            } catch (e: any) { /* silent */ }
             return null;
         };
 
-        return (await tryEndpoint(instance, false)) || (await tryEndpoint(instance, true));
+        // Try direct V10 -> direct V7 -> proxied V10
+        let url = await tryEndpoint(instance, false, false);
+        if (!url) {
+            const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
+            url = await tryEndpoint(v7Url, true, false);
+        }
+        if (!url) url = await tryEndpoint(instance, false, true);
+
+        return url;
     };
 
     const probePiped = async (instance: string): Promise<string | null> => {
@@ -103,7 +118,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             const res = await fetchWithTimeout(wrapCORS(`${instance}/api/v1/videos/${videoId}?local=true`), { mode: 'cors' });
             if (res.ok) {
                 const data = await res.json();
-                const formats = data.adaptiveFormats || data.formatStreams || [];
+                const formats = (data.adaptiveFormats || []).concat(data.formatStreams || []);
                 if (formats.length > 0) {
                     log(`Invidious ${instance} SUCCESS`);
                     return formats[0].url;
@@ -114,7 +129,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     try {
-        log(`Resilient probe for ${videoId} (${type})...`);
+        log(`Hardened probe for ${videoId} (${type})...`);
 
         // Parallel swarm: each promise rejects if it fails to find a URL
         const wrapToReject = async (p: Promise<string | null>) => {
@@ -124,20 +139,20 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
         };
 
         const strategies = [
-            ...COBALT_NODES.map(n => wrapToReject(probeCobalt(n))),
-            ...PIPED_NODES.slice(0, 5).map(n => wrapToReject(probePiped(n))),
-            ...INVIDIOUS_NODES.slice(0, 3).map(n => wrapToReject(probeInvidious(n)))
+            ...COBALT_NODES.slice(0, 3).map(n => wrapToReject(probeCobalt(n))),
+            ...PIPED_NODES.slice(0, 6).map(n => wrapToReject(probePiped(n))),
+            ...INVIDIOUS_NODES.slice(0, 4).map(n => wrapToReject(probeInvidious(n)))
         ];
 
         try {
             const firstSuccess = await Promise.any(strategies);
-            log("Strategy successful!");
+            log("Swarm successful!");
             return { url: firstSuccess, logs };
         } catch (e) {
-            log("All extraction strategies in swarm failed.");
+            log("Swarm failed entirely.");
         }
     } catch (err: any) {
-        log(`Probe failed: ${err.message}`);
+        log(`Probe aborted: ${err.message}`);
     }
 
     return { url: null, logs };
