@@ -396,30 +396,41 @@ export async function GET(request: NextRequest) {
             }
 
             let result: { url: string; title: string } | null = null;
+            const phaseErrors: string[] = [];
 
             // ── PHASE 1: youtubei.js extraction (most reliable) ──
             if (videoId) {
                 console.log("Phase 1: youtubei.js extraction...");
-                result = await extractViaYouTubeJS(
-                    videoId,
-                    type === "audio" ? "audio" : "video",
-                );
+                try {
+                    result = await extractViaYouTubeJS(
+                        videoId,
+                        type === "audio" ? "audio" : "video",
+                    );
+                    if (!result) phaseErrors.push("P1:YouTubeJS returned null");
+                } catch (e: any) {
+                    phaseErrors.push(`P1:YouTubeJS error: ${e?.message || e}`);
+                }
             }
 
             // ── PHASE 2: Cobalt fleet ──
             if (!result && videoId) {
                 console.log("Phase 2: Cobalt fleet...");
                 for (const instance of COBALT_INSTANCES) {
-                    result = await tryCobalt(
-                        instance,
-                        videoId,
-                        type === "audio" ? "audio" : "video",
-                    );
-                    if (result) {
-                        console.log(`Phase 2: Cobalt success via ${instance}`);
-                        break;
+                    try {
+                        result = await tryCobalt(
+                            instance,
+                            videoId,
+                            type === "audio" ? "audio" : "video",
+                        );
+                        if (result) {
+                            console.log(`Phase 2: Cobalt success via ${instance}`);
+                            break;
+                        }
+                    } catch (e: any) {
+                        phaseErrors.push(`P2:${instance}: ${e?.message || e}`);
                     }
                 }
+                if (!result) phaseErrors.push("P2:All Cobalt instances failed");
             }
 
             // ── PHASE 3: Piped fleet ──
@@ -429,32 +440,42 @@ export async function GET(request: NextRequest) {
                     () => Math.random() - 0.5,
                 );
                 for (const instance of shuffled.slice(0, 5)) {
-                    result = await tryPiped(
-                        instance,
-                        videoId,
-                        type === "audio" ? "audio" : "video",
-                    );
-                    if (result) {
-                        console.log(`Phase 3: Piped success via ${instance}`);
-                        break;
+                    try {
+                        result = await tryPiped(
+                            instance,
+                            videoId,
+                            type === "audio" ? "audio" : "video",
+                        );
+                        if (result) {
+                            console.log(`Phase 3: Piped success via ${instance}`);
+                            break;
+                        }
+                    } catch (e: any) {
+                        phaseErrors.push(`P3:${instance}: ${e?.message || e}`);
                     }
                 }
+                if (!result) phaseErrors.push("P3:All Piped instances failed");
             }
 
             // ── PHASE 4: Invidious fleet ──
             if (!result && videoId) {
                 console.log("Phase 4: Invidious fleet...");
                 for (const instance of INVIDIOUS_INSTANCES) {
-                    result = await tryInvidious(
-                        instance,
-                        videoId,
-                        type === "audio" ? "audio" : "video",
-                    );
-                    if (result) {
-                        console.log(`Phase 4: Invidious success via ${instance}`);
-                        break;
+                    try {
+                        result = await tryInvidious(
+                            instance,
+                            videoId,
+                            type === "audio" ? "audio" : "video",
+                        );
+                        if (result) {
+                            console.log(`Phase 4: Invidious success via ${instance}`);
+                            break;
+                        }
+                    } catch (e: any) {
+                        phaseErrors.push(`P4:${instance}: ${e?.message || e}`);
                     }
                 }
+                if (!result) phaseErrors.push("P4:All Invidious instances failed");
             }
 
             // Return URL if get_url mode
@@ -466,7 +487,7 @@ export async function GET(request: NextRequest) {
                 });
             }
 
-            if (!result?.url) throw new Error("All extraction methods failed");
+            if (!result?.url) throw new Error(`All extraction methods failed | ${phaseErrors.join(" | ")}`);
 
             // ── Stream the result ──
             console.log("Streaming result...");
