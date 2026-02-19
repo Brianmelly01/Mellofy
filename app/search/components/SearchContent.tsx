@@ -132,9 +132,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 setDownloadProgress(100);
 
             } catch (err: any) {
-                // Attach debug logs to the error so user can see what happened
-                const logDump = debugLogs.length > 0 ? `\n\nDEBUG LOGS:\n${debugLogs.slice(0, 5).join('\n')}\n(and ${Math.max(0, debugLogs.length - 5)} more)` : '';
-                err.message = `${err.message} ${logDump}`;
+                // Attach debug logs to the console but keep alert clean
+                console.warn("Extraction details:", debugLogs);
                 throw err;
             }
         };
@@ -149,8 +148,16 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             }
         } catch (err: any) {
             console.error("Download error:", err);
+
+            // Simplified, actionable error message
+            const friendlyMsg = err.message?.includes("blocked") || err.message?.includes("failed")
+                ? "YouTube has blocked automated extraction for this video on our servers."
+                : `Download failed: ${err.message?.split('|')[0].trim()}`;
+
             const cobaltUrl = `https://cobalt.tools`;
-            if (confirm(`Download failed: ${err.message}\n\nWould you like to open cobalt.tools to download manually?`)) {
+            const confirmMsg = `${friendlyMsg}\n\nOur "Ghost Protocol" fallback also failed. Would you like to use cobalt.tools to download manually?`;
+
+            if (confirm(confirmMsg)) {
                 window.open(cobaltUrl, '_blank');
             }
         } finally {
@@ -158,6 +165,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             setDownloadProgress(0);
         }
     };
+
 
     if (loading) {
         return (
