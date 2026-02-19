@@ -13,10 +13,11 @@ export const INVIDIOUS_NODES = [
 ];
 
 export const COBALT_NODES = [
-    // All public instances currently require auth or have strict CORS/Bot protection
-    // "https://cobalt-backend.canine.tools",
-    // "https://cobalt-api.meowing.de",
-    // "https://capi.3kh0.net",
+    "https://api.cobalt.tools",
+    "https://co.wuk.sh",
+    "https://cobalt-backend.canine.tools",
+    "https://cobalt-api.meowing.de",
+    "https://capi.3kh0.net",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
@@ -36,6 +37,14 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
         }
     };
 
+    const wrapCORS = (url: string) => {
+        const proxies = [
+            (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+            (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+        ];
+        return proxies[Math.floor(Math.random() * proxies.length)](url);
+    };
+
     const probeCobalt = async (instance: string): Promise<string | null> => {
         const tryEndpoint = async (endpoint: string, isV10: boolean, useProxy: boolean = false) => {
             try {
@@ -44,7 +53,6 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     downloadMode: type === 'audio' ? 'audio' : 'auto',
                     videoQuality: '720',
                     youtubeVideoCodec: 'h264',
-                    alwaysProxy: false,
                 } : {
                     url: `https://youtube.com/watch?v=${videoId}`,
                     vCodec: 'h264',
@@ -52,11 +60,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     isAudioOnly: type === 'audio',
                 };
 
-                const targetUrl = useProxy
-                    ? (Math.random() > 0.5
-                        ? `https://corsproxy.io/?${encodeURIComponent(endpoint)}`
-                        : `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`)
-                    : endpoint;
+                const targetUrl = useProxy ? wrapCORS(endpoint) : endpoint;
 
                 const res = await fetchWithTimeout(targetUrl, {
                     method: "POST",
@@ -65,69 +69,67 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                         "Accept": "application/json",
                     },
                     body: JSON.stringify(payload),
-                    referrerPolicy: "no-referrer",
-                    credentials: "omit",
                     mode: "cors",
                 }, useProxy ? 10000 : 5000);
 
                 if (res.ok) {
                     const d = await res.json();
                     if (d.status === 'error' || d.status === 'picker') {
-                        log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) status: ${d.status}`);
+                        log(`${instance} Error: ${d.error?.code || d.status}`);
                         return null;
                     }
-                    if (d.url || d.picker?.[0]?.url) {
-                        log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) SUCCESS`);
-                        return d.url || d.picker?.[0]?.url;
+                    const resUrl = d.url || d.picker?.[0]?.url;
+                    if (resUrl) {
+                        log(`${instance} SUCCESS`);
+                        return resUrl;
                     }
-                } else {
-                    log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) HTTP ${res.status}`);
                 }
             } catch (e: any) {
-                log(`${instance} (${isV10 ? 'v10' : 'v7'}${useProxy ? '+proxy' : ''}) Failed: ${e.message || 'CORS/Net'}`);
+                log(`${instance} Failed: ${e.message || 'CORS'}`);
             }
             return null;
         };
 
-        // 1. Try Direct v10
         let url = await tryEndpoint(instance, true, false);
         if (url) return url;
+        return await tryEndpoint(instance, true, true);
+    };
 
-        // 2. Try Direct v7
-        if (!instance.includes('/api/json')) {
-            const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
-            url = await tryEndpoint(v7Url, false, false);
-            if (url) return url;
+    const probePiped = async (instance: string): Promise<string | null> => {
+        try {
+            const res = await fetchWithTimeout(wrapCORS(`${instance}/streams/${videoId}`), { mode: 'cors' });
+            if (res.ok) {
+                const data = await res.json();
+                const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
+                if (streams?.length) {
+                    log(`Piped ${instance} SUCCESS`);
+                    return streams[0].url;
+                }
+            }
+        } catch (e: any) {
+            log(`Piped ${instance} Failed`);
         }
-
-        // 3. Try Proxy v10 (Last Resort)
-        // Only try proxy if direct failed. corsproxy.io works well for JSON POST.
-        url = await tryEndpoint(instance, true, true);
-        if (url) return url;
-
         return null;
     };
 
-    // V5 Strategy: Direct Cobalt Swarm
-    // We only use Cobalt because it reliably supports CORS for client-side use.
     try {
-        log(`Starting swarm for ${videoId}`);
+        log(`Client-side probe starting for ${videoId}...`);
 
-        // Randomize order to spread load
-        const nodes = [...COBALT_NODES].sort(() => Math.random() - 0.5);
+        // Strategy 1: Cobalt Swarm (Fastest)
+        const cobaltResults = await Promise.all(COBALT_NODES.slice(0, 3).map(n => probeCobalt(n)));
+        const cobaltUrl = cobaltResults.find(u => !!u);
+        if (cobaltUrl) return { url: cobaltUrl, logs };
 
-        const batchSize = 5;
-        for (let i = 0; i < nodes.length; i += batchSize) {
-            const batch = nodes.slice(i, i + batchSize);
-            log(`Batch ${i / batchSize + 1}: Probing ${batch.join(', ')}`);
+        // Strategy 2: Piped Swarm
+        const pipedResults = await Promise.all(PIPED_NODES.slice(0, 3).map(n => probePiped(n)));
+        const pipedUrl = pipedResults.find(u => !!u);
+        if (pipedUrl) return { url: pipedUrl, logs };
 
-            const results = await Promise.all(batch.map(url => probeCobalt(url)));
-            const valid = results.find(url => url !== null);
-            if (valid) return { url: valid, logs };
-        }
-    } catch (globalErr: any) {
-        log(`Fatal error: ${globalErr.message}`);
+        log("All client-side extraction strategies failed.");
+    } catch (err: any) {
+        log(`Probe error: ${err.message}`);
     }
 
     return { url: null, logs };
 };
+
