@@ -231,11 +231,12 @@ async function extractViaYouTubeJS(
             return { url: chosen.url, title };
         }
 
-        console.log("YouTubeJS: No suitable format with URL found");
-        return null;
+        const debugMsg = `No suitable URL. Formats: ${allFormats.length}, withUrl: ${withUrl.length}. Types: ${withUrl.map((f: any) => f.mime_type).slice(0, 3).join(',')}`;
+        console.log(`YouTubeJS: ${debugMsg}`);
+        throw new Error(debugMsg); // Throw so it shows in the error log
     } catch (e: any) {
         console.error("YouTubeJS error:", e?.message || e);
-        return null;
+        throw e; // Re-throw to be caught by phaseErrors
     }
 }
 
