@@ -54,15 +54,30 @@ export async function GET(request: NextRequest) {
             });
 
             if (videos && videos.length > 0) {
-                const results = videos.map((video) => ({
-                    id: video.id || "",
-                    title: video.title || "Untitled",
-                    artist: video.channel?.name || "Unknown Artist",
-                    thumbnail: video.thumbnail?.url || "",
-                    url: video.url || "",
-                    duration: video.durationFormatted || "",
-                    type: "video" as const,
-                }));
+                const results = videos.map((video) => {
+                    // Harden title extraction
+                    let title = video.title || "Untitled";
+                    if (title === "Untitled" && video.id) {
+                        // Sometimes the title is missing but we can at least try to search again or use a placeholder
+                        // but usually youtube-sr provides it.
+                    }
+
+                    // Harden artist extraction (Topic channels often have - Topic in the name)
+                    let artist = video.channel?.name || "Unknown Artist";
+                    if (artist.endsWith(" - Topic")) {
+                        artist = artist.replace(" - Topic", "");
+                    }
+
+                    return {
+                        id: video.id || "",
+                        title,
+                        artist,
+                        thumbnail: video.thumbnail?.url || "",
+                        url: video.url || "",
+                        duration: video.durationFormatted || "",
+                        type: "video" as const,
+                    };
+                });
                 return NextResponse.json({ results });
             }
         } catch (e) {

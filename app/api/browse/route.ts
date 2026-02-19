@@ -19,24 +19,27 @@ export async function GET(request: NextRequest) {
 
         const categories: any[] = [];
         const playlists: any[] = [];
+        const newReleases: any[] = [];
+        const trending: any[] = [];
 
         // Process Home Feed for Featured Playlists
         if (home.sections) {
             home.sections.forEach((section: any) => {
-                const title = section.header?.title?.toString() || "";
-                // Look for sections that likely contain playlists or featured content
+                const title = section.header?.title?.toString().toLowerCase() || "";
+
                 if (section.contents && Array.isArray(section.contents)) {
                     section.contents.forEach((item: any) => {
-                        if (item.type === "MusicResponsiveListItem" || item.type === "MusicTwoRowItem") {
-                            const playlistItem = {
-                                id: item.id || "",
-                                title: item.title?.toString() || "Untitled",
-                                cover: item.thumbnails?.[0]?.url || "",
-                                artist: item.author?.name || "Various Artists",
-                                type: item.item_type || "Playlist"
-                            };
-                            if (playlistItem.id && playlists.length < 12) {
-                                playlists.push(playlistItem);
+                        const playlistItem = {
+                            id: item.id || "",
+                            title: item.title?.toString() || "Untitled",
+                            cover: item.thumbnails?.[0]?.url || "",
+                            artist: item.author?.name || "Various Artists",
+                            type: item.item_type || "Playlist"
+                        };
+
+                        if (playlistItem.id) {
+                            if (item.type === "MusicResponsiveListItem" || item.type === "MusicTwoRowItem") {
+                                if (playlists.length < 12) playlists.push(playlistItem);
                             }
                         }
                     });
@@ -44,18 +47,49 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        // Process Explore for Moods & Genres (Categories)
-        const moodsSection = explore.sections.find(s => s.header?.title?.toString().toLowerCase().includes('moods'));
-        if (moodsSection && moodsSection.contents) {
-            moodsSection.contents.forEach((item: any) => {
-                categories.push({
-                    name: item.title?.toString() || "Unknown",
-                    id: item.id || "",
-                    // Generate a deterministic gradient based on name
-                    gradient: getGradient(item.title?.toString() || "")
-                });
-            });
-        }
+        // Process Explore Sections
+        explore.sections.forEach((section: any) => {
+            const title = section.header?.title?.toString().toLowerCase() || "";
+
+            if (section.contents && Array.isArray(section.contents)) {
+                // Moods & Genres
+                if (title.includes("moods")) {
+                    section.contents.forEach((item: any) => {
+                        categories.push({
+                            name: item.title?.toString() || "Unknown",
+                            id: item.id || "",
+                            gradient: getGradient(item.title?.toString() || "")
+                        });
+                    });
+                }
+
+                // New Releases
+                else if (title.includes("new") || title.includes("albums")) {
+                    section.contents.slice(0, 12).forEach((item: any) => {
+                        newReleases.push({
+                            id: item.id || "",
+                            title: item.title?.toString() || "Untitled",
+                            cover: item.thumbnails?.[0]?.url || "",
+                            artist: item.author?.name || "Various Artists",
+                            type: item.item_type || "Album"
+                        });
+                    });
+                }
+
+                // Trending
+                else if (title.includes("trending")) {
+                    section.contents.slice(0, 12).forEach((item: any) => {
+                        trending.push({
+                            id: item.id || "",
+                            title: item.title?.toString() || "Untitled",
+                            cover: item.thumbnails?.[0]?.url || "",
+                            artist: item.author?.name || "Various Artists",
+                            type: item.item_type || "Track"
+                        });
+                    });
+                }
+            }
+        });
 
         // If moodsSection is empty, try to get some defaults
         if (categories.length === 0) {
@@ -68,8 +102,10 @@ export async function GET(request: NextRequest) {
         }
 
         return NextResponse.json({
-            categories: categories.slice(0, 8),
+            categories: categories.slice(0, 12),
             playlists: playlists.slice(0, 12),
+            newReleases: newReleases.slice(0, 12),
+            trending: trending.slice(0, 12),
         });
 
     } catch (error: any) {
