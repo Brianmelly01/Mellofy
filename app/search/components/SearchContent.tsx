@@ -154,21 +154,24 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 ? "YouTube has blocked automated extraction for this video on our servers."
                 : `Download failed: ${err.message?.split('|')[0].trim()}`;
 
-            // Improved Manual Fallback Escalation
+            // Triple-Threat Manual Fallback escalation
             const cobaltUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${track.id}`;
             const pipedUrl = `https://piped.video/watch?v=${track.id}`;
+            const invidiousUrl = `https://yewtu.be/watch?v=${track.id}`;
 
             const choice = confirm(
                 `${friendlyMsg}\n\n` +
-                `Our automated "Ghost Protocol" also failed for this specific video.\n\n` +
-                `Would you like to try downloading via Cobalt (Recommended)?\n` +
-                `(We've pre-filled the link for you)`
+                `The automated extraction failed for this restricted video.\n\n` +
+                `Try downloading via Cobalt (Recommended)?\n` +
+                `(Pre-filled for you)`
             );
 
             if (choice) {
                 window.open(cobaltUrl, '_blank');
             } else if (confirm("Try secondary fallback via Piped.video?")) {
                 window.open(pipedUrl, '_blank');
+            } else if (confirm("Last resort: Try via Invidious (yewtu.be)?")) {
+                window.open(invidiousUrl, '_blank');
             }
         } finally {
             setDownloadingId(null);

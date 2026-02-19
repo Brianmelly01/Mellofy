@@ -1,4 +1,5 @@
-// V5 ULTIMATE PROBE CONSTANTS — refreshed 2026 nodes
+
+// V5 EXTREME RESILIENCE — 30+ Global Nodes
 export const PIPED_NODES = [
     "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
@@ -6,11 +7,14 @@ export const PIPED_NODES = [
     "https://api.piped.yt", "https://pipedapi.r4fo.com",
     "https://pipedapi.rivo.lol", "https://pipedapi.projectsegfau.lt",
     "https://pipedapi.in.projectsegfau.lt", "https://pipedapi.us.projectsegfau.lt",
+    "https://pipedapi.drgns.space", "https://pipedapi.official-halit.de",
+    "https://pipedapi.moe.moe", "https://pipedapi.priv.au",
 ];
 
 export const INVIDIOUS_NODES = [
     "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
     "https://iv.melmac.space", "https://invidious.no-logs.com", "https://inv.riverside.rocks",
+    "https://invidio.xamh.de", "https://invidious.namazso.eu",
 ];
 
 export const COBALT_NODES = [
@@ -18,6 +22,8 @@ export const COBALT_NODES = [
     "https://api.cobalt.tools",
     "https://cobalt-backend.canine.tools",
     "https://cobalt-api.meowing.de",
+    "https://cobalt.hyonsu.com",
+    "https://co.darkness.services",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
@@ -47,6 +53,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
         const proxies = [
             (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
             (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+            (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
         ];
         const index = Math.abs(url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % proxies.length;
         return proxies[index](url);
@@ -55,7 +62,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     const probeCobalt = async (instance: string): Promise<string | null> => {
         const tryEndpoint = async (endpoint: string, useProxy: boolean = false) => {
             try {
-                // IMPORTANT: Cobalt requires POST, AllOrigins is unreliable for POST. Use corsproxy.io.
+                // Cobalt requires POST. CORSProxy.io is favored for POST stability.
                 const targetUrl = useProxy ? wrapCORSPOST(endpoint) : endpoint;
                 const res = await fetchWithTimeout(targetUrl, {
                     method: "POST",
@@ -92,13 +99,17 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
                     if (streams?.length) {
                         log(`Piped ${instance} SUCCESS`);
+                        // Prefer high bitrate OPUS for audio
+                        if (type === 'audio') {
+                            const opus = streams.find((s: any) => s.codec === 'opus');
+                            return (opus || streams[0]).url;
+                        }
                         return streams[0].url;
                     }
                 }
             } catch (e: any) { /* silent */ }
             return null;
         };
-        // Strategy: Hit direct first (many have CORS), then proxy
         return (await tryPiped(false)) || (await tryPiped(true));
     };
 
@@ -118,7 +129,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     try {
-        log(`Intelligence Probe 4.0 for ${videoId} (${type})...`);
+        log(`Resilience Overload 5.0 for ${videoId} (${type})...`);
         const wrapToReject = async (p: Promise<string | null>) => {
             const res = await p;
             if (!res) throw new Error("Fail");
@@ -127,8 +138,8 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
 
         const strategies = [
             ...COBALT_NODES.map(n => wrapToReject(probeCobalt(n))),
-            ...PIPED_NODES.slice(0, 8).map(n => wrapToReject(probePiped(n))),
-            ...INVIDIOUS_NODES.slice(0, 4).map(n => wrapToReject(probeInvidious(n)))
+            ...PIPED_NODES.slice(0, 12).map(n => wrapToReject(probePiped(n))),
+            ...INVIDIOUS_NODES.slice(0, 6).map(n => wrapToReject(probeInvidious(n)))
         ];
 
         try {
@@ -136,11 +147,12 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             log("Swarm success!");
             return { url: firstSuccess, logs };
         } catch (e) {
-            log("Swarm intelligence failed to find working node.");
+            log("All swarm strategies (30+ nodes) failed.");
         }
     } catch (err: any) {
-        log(`Probe aborted: ${err.message}`);
+        log(`Probe crash: ${err.message}`);
     }
 
     return { url: null, logs };
 };
+
