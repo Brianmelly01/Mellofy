@@ -180,10 +180,12 @@ async function extractViaYouTubeJS(
 ): Promise<{ url: string; title: string } | null> {
     try {
         console.log(`YouTubeJS: Extracting ${type} for ${videoId}...`);
+        // Use ANDROID client — WEB client returns empty URLs that need decipher (broken in v16)
         const yt = await Innertube.create({
             retrieve_player: true,
             generate_session_locally: true,
             cache: new UniversalCache(false),
+            client_type: 'ANDROID' as any,
         });
 
         const info = await yt.getBasicInfo(videoId);
@@ -203,83 +205,33 @@ async function extractViaYouTubeJS(
             return null;
         }
 
+        // Filter to formats that have a URL
+        const withUrl = allFormats.filter((f: any) => !!f.url);
+        console.log(`YouTubeJS: ${allFormats.length} total formats, ${withUrl.length} with URLs`);
+
         let chosen: any = null;
 
         if (type === "audio") {
-            // Prefer audio/mp4, then audio/webm
             chosen =
-                allFormats.find(
-                    (f: any) =>
-                        f.mime_type?.includes("audio/mp4") && f.url,
-                ) ||
-                allFormats.find(
-                    (f: any) =>
-                        f.mime_type?.includes("audio/webm") && f.url,
-                ) ||
-                allFormats.find(
-                    (f: any) => f.mime_type?.includes("audio") && f.url,
-                );
+                withUrl.find((f: any) => f.mime_type?.includes("audio/mp4")) ||
+                withUrl.find((f: any) => f.mime_type?.includes("audio/webm")) ||
+                withUrl.find((f: any) => f.mime_type?.includes("audio"));
         } else {
-            // Prefer 720p mp4, then 480p, then any mp4 with audio
             chosen =
-                allFormats.find(
-                    (f: any) =>
-                        f.mime_type?.includes("video/mp4") &&
-                        f.quality_label === "720p" &&
-                        f.url,
-                ) ||
-                allFormats.find(
-                    (f: any) =>
-                        f.mime_type?.includes("video/mp4") &&
-                        f.quality_label === "480p" &&
-                        f.url,
-                ) ||
-                allFormats.find(
-                    (f: any) =>
-                        f.mime_type?.includes("video/mp4") &&
-                        f.has_audio &&
-                        f.url,
-                ) ||
-                allFormats.find(
-                    (f: any) =>
-                        f.mime_type?.includes("video/mp4") && f.url,
-                ) ||
-                allFormats.find(
-                    (f: any) => f.mime_type?.includes("video") && f.url,
-                );
+                withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "720p") ||
+                withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "480p") ||
+                withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio) ||
+                withUrl.find((f: any) => f.mime_type?.includes("video/mp4")) ||
+                withUrl.find((f: any) => f.mime_type?.includes("video"));
         }
 
         if (chosen?.url) {
-            const title =
-                info.basic_info?.title || "download";
-            console.log(
-                `YouTubeJS: SUCCESS — found ${type} (${chosen.quality_label || chosen.bitrate || "?"})`,
-            );
+            const title = info.basic_info?.title || "download";
+            console.log(`YouTubeJS: SUCCESS — found ${type} (${chosen.quality_label || chosen.bitrate || "?"})`);
             return { url: chosen.url, title };
         }
 
-        // If formats exist but need decipher, try getting the decipher URL
-        if (allFormats.length > 0) {
-            console.log("YouTubeJS: Formats found but no direct URL, trying decipher...");
-            const format = type === "audio"
-                ? allFormats.find((f: any) => f.mime_type?.includes("audio"))
-                : allFormats.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "720p")
-                || allFormats.find((f: any) => f.mime_type?.includes("video/mp4"));
-
-            if (format) {
-                try {
-                    const decipheredUrl = format.decipher ? await format.decipher(yt.session?.player) : null;
-                    if (decipheredUrl) {
-                        console.log("YouTubeJS: Decipher SUCCESS");
-                        return { url: decipheredUrl, title: info.basic_info?.title || "download" };
-                    }
-                } catch (decipherErr) {
-                    console.log("YouTubeJS: Decipher failed:", decipherErr);
-                }
-            }
-        }
-
-        console.log("YouTubeJS: No suitable format found");
+        console.log("YouTubeJS: No suitable format with URL found");
         return null;
     } catch (e: any) {
         console.error("YouTubeJS error:", e?.message || e);
