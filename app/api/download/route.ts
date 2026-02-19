@@ -174,70 +174,74 @@ async function tryInvidious(
 }
 
 // ── youtubei.js extraction (Primary) ──
+// ── youtubei.js extraction (Primary) ──
 async function extractViaYouTubeJS(
     videoId: string,
     type: string,
 ): Promise<{ url: string; title: string } | null> {
-    try {
-        console.log(`YouTubeJS: Extracting ${type} for ${videoId}...`);
-        // Use ANDROID client — WEB client returns empty URLs that need decipher (broken in v16)
-        const yt = await Innertube.create({
-            retrieve_player: true,
-            generate_session_locally: true,
-            cache: new UniversalCache(false),
-            client_type: 'ANDROID' as any,
-        });
+    const clients = ['ANDROID', 'TV_EMBEDDED', 'IOS'] as const;
+    let lastError: any = null;
 
-        const info = await yt.getBasicInfo(videoId);
+    for (const clientName of clients) {
+        try {
+            console.log(`YouTubeJS: Trying ${clientName} for ${videoId}...`);
+            const yt = await Innertube.create({
+                retrieve_player: true,
+                generate_session_locally: true,
+                cache: new UniversalCache(false),
+                client_type: clientName as any,
+            });
 
-        if (!info.streaming_data) {
-            console.log("YouTubeJS: No streaming data available");
-            return null;
+            const info = await yt.getBasicInfo(videoId);
+
+            if (!info.streaming_data) {
+                console.log(`YouTubeJS (${clientName}): No streaming data (Blocked?)`);
+                continue;
+            }
+
+            const allFormats = [
+                ...(info.streaming_data.adaptive_formats || []),
+                ...(info.streaming_data.formats || []),
+            ];
+
+            if (allFormats.length === 0) {
+                console.log(`YouTubeJS (${clientName}): No formats found`);
+                continue;
+            }
+
+            const withUrl = allFormats.filter((f: any) => !!f.url);
+            console.log(`YouTubeJS (${clientName}): ${allFormats.length} total formats, ${withUrl.length} with URLs`);
+
+            let chosen: any = null;
+            if (type === "audio") {
+                chosen =
+                    withUrl.find((f: any) => f.mime_type?.includes("audio/mp4")) ||
+                    withUrl.find((f: any) => f.mime_type?.includes("audio/webm")) ||
+                    withUrl.find((f: any) => f.mime_type?.includes("audio"));
+            } else {
+                chosen =
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "720p") ||
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "480p") ||
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio) ||
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4")) ||
+                    withUrl.find((f: any) => f.mime_type?.includes("video"));
+            }
+
+            if (chosen?.url) {
+                const title = info.basic_info?.title || "download";
+                console.log(`YouTubeJS (${clientName}): SUCCESS — found ${type}`);
+                return { url: chosen.url, title };
+            }
+
+            console.log(`YouTubeJS (${clientName}): No suitable URL found`);
+        } catch (e: any) {
+            console.error(`YouTubeJS (${clientName}) error:`, e?.message || e);
+            lastError = e;
         }
-
-        const allFormats = [
-            ...(info.streaming_data.adaptive_formats || []),
-            ...(info.streaming_data.formats || []),
-        ];
-
-        if (allFormats.length === 0) {
-            console.log("YouTubeJS: No formats found");
-            return null;
-        }
-
-        // Filter to formats that have a URL
-        const withUrl = allFormats.filter((f: any) => !!f.url);
-        console.log(`YouTubeJS: ${allFormats.length} total formats, ${withUrl.length} with URLs`);
-
-        let chosen: any = null;
-
-        if (type === "audio") {
-            chosen =
-                withUrl.find((f: any) => f.mime_type?.includes("audio/mp4")) ||
-                withUrl.find((f: any) => f.mime_type?.includes("audio/webm")) ||
-                withUrl.find((f: any) => f.mime_type?.includes("audio"));
-        } else {
-            chosen =
-                withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "720p") ||
-                withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "480p") ||
-                withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio) ||
-                withUrl.find((f: any) => f.mime_type?.includes("video/mp4")) ||
-                withUrl.find((f: any) => f.mime_type?.includes("video"));
-        }
-
-        if (chosen?.url) {
-            const title = info.basic_info?.title || "download";
-            console.log(`YouTubeJS: SUCCESS — found ${type} (${chosen.quality_label || chosen.bitrate || "?"})`);
-            return { url: chosen.url, title };
-        }
-
-        const debugMsg = `No suitable URL. Formats: ${allFormats.length}, withUrl: ${withUrl.length}. Types: ${withUrl.map((f: any) => f.mime_type).slice(0, 3).join(',')}`;
-        console.log(`YouTubeJS: ${debugMsg}`);
-        throw new Error(debugMsg); // Throw so it shows in the error log
-    } catch (e: any) {
-        console.error("YouTubeJS error:", e?.message || e);
-        throw e; // Re-throw to be caught by phaseErrors
     }
+
+    const msg = `YouTubeJS: All clients failed. Last error: ${lastError?.message || 'No streaming data'}`;
+    throw new Error(msg);
 }
 
 // ── Main Route Handler ──
