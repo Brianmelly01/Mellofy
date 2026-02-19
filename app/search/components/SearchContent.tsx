@@ -154,11 +154,21 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 ? "YouTube has blocked automated extraction for this video on our servers."
                 : `Download failed: ${err.message?.split('|')[0].trim()}`;
 
+            // Improved Manual Fallback Escalation
             const cobaltUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${track.id}`;
-            const confirmMsg = `${friendlyMsg}\n\nOur "Ghost Protocol" fallback also failed. Would you like to use cobalt.tools to download manually?`;
+            const pipedUrl = `https://piped.video/watch?v=${track.id}`;
 
-            if (confirm(confirmMsg)) {
+            const choice = confirm(
+                `${friendlyMsg}\n\n` +
+                `Our automated "Ghost Protocol" also failed for this specific video.\n\n` +
+                `Would you like to try downloading via Cobalt (Recommended)?\n` +
+                `(We've pre-filled the link for you)`
+            );
+
+            if (choice) {
                 window.open(cobaltUrl, '_blank');
+            } else if (confirm("Try secondary fallback via Piped.video?")) {
+                window.open(pipedUrl, '_blank');
             }
         } finally {
             setDownloadingId(null);

@@ -1,25 +1,23 @@
-
-// V5 ULTIMATE PROBE CONSTANTS — refreshed to currently-live instances
+// V5 ULTIMATE PROBE CONSTANTS — refreshed 2026 nodes
 export const PIPED_NODES = [
     "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
     "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
     "https://api.piped.yt", "https://pipedapi.r4fo.com",
-    "https://pipedapi.colinslegacy.com", "https://pipedapi.rivo.lol",
-    "https://pipedapi.drgns.space", "https://pipedapi.projectsegfau.lt",
+    "https://pipedapi.rivo.lol", "https://pipedapi.projectsegfau.lt",
+    "https://pipedapi.in.projectsegfau.lt", "https://pipedapi.us.projectsegfau.lt",
 ];
 
 export const INVIDIOUS_NODES = [
     "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
-    "https://invidious.no-logs.com", "https://inv.riverside.rocks", "https://invidious.snopyta.org",
+    "https://iv.melmac.space", "https://invidious.no-logs.com", "https://inv.riverside.rocks",
 ];
 
 export const COBALT_NODES = [
     "https://co.wuk.sh",
     "https://api.cobalt.tools",
-    "https://cobalt-backend.canine.tools", // Sometimes works for client-side
+    "https://cobalt-backend.canine.tools",
     "https://cobalt-api.meowing.de",
-    "https://capi.3kh0.net",
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
@@ -30,7 +28,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
         logs.push(entry);
     };
 
-    const fetchWithTimeout = async (url: string, options: any, timeout = 7000) => {
+    const fetchWithTimeout = async (url: string, options: any, timeout = 12000) => {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
         try {
@@ -43,79 +41,70 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
         }
     };
 
-    const wrapCORS = (url: string) => {
+    const wrapCORSPOST = (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+    const wrapCORSGET = (url: string) => {
         const proxies = [
             (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
             (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
         ];
-        // Use a different proxy based on URL to avoid multi-hitting same rate limit
         const index = Math.abs(url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % proxies.length;
         return proxies[index](url);
     };
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
-        const tryEndpoint = async (endpoint: string, isV7: boolean, useProxy: boolean = false) => {
+        const tryEndpoint = async (endpoint: string, useProxy: boolean = false) => {
             try {
-                const targetUrl = useProxy ? wrapCORS(endpoint) : endpoint;
-                const payload = isV7 ? {
-                    url: `https://youtube.com/watch?v=${videoId}`,
-                    vCodec: 'h264', vQuality: '720', isAudioOnly: type === 'audio',
-                } : {
-                    url: `https://youtube.com/watch?v=${videoId}`,
-                    downloadMode: type === 'audio' ? 'audio' : 'auto',
-                    videoQuality: '720',
-                };
-
+                // IMPORTANT: Cobalt requires POST, AllOrigins is unreliable for POST. Use corsproxy.io.
+                const targetUrl = useProxy ? wrapCORSPOST(endpoint) : endpoint;
                 const res = await fetchWithTimeout(targetUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify({
+                        url: `https://youtube.com/watch?v=${videoId}`,
+                        downloadMode: type === 'audio' ? 'audio' : 'auto',
+                        videoQuality: '720',
+                    }),
                     mode: "cors",
-                }, useProxy ? 10000 : 5000);
+                }, useProxy ? 15000 : 8000);
 
                 if (res.ok) {
                     const d = await res.json();
-                    const resUrl = d.url || d.picker?.[0]?.url;
-                    if (resUrl) {
-                        log(`${instance} (${isV7 ? 'v7' : 'v10'}) SUCCESS`);
-                        return resUrl;
+                    if (d.url || d.picker?.[0]?.url) {
+                        log(`${instance} SUCCESS`);
+                        return d.url || d.picker?.[0]?.url;
                     }
                 }
             } catch (e: any) { /* silent */ }
             return null;
         };
 
-        // Try direct V10 -> direct V7 -> proxied V10
-        let url = await tryEndpoint(instance, false, false);
-        if (!url) {
-            const v7Url = instance.endsWith('/') ? `${instance}api/json` : `${instance}/api/json`;
-            url = await tryEndpoint(v7Url, true, false);
-        }
-        if (!url) url = await tryEndpoint(instance, false, true);
-
-        return url;
+        return (await tryEndpoint(instance, false)) || (await tryEndpoint(instance, true));
     };
 
     const probePiped = async (instance: string): Promise<string | null> => {
-        try {
-            // Piped APIs are often less strict if proxied
-            const res = await fetchWithTimeout(wrapCORS(`${instance}/streams/${videoId}`), { mode: 'cors' });
-            if (res.ok) {
-                const data = await res.json();
-                const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
-                if (streams?.length) {
-                    log(`Piped ${instance} SUCCESS`);
-                    return streams[0].url;
+        const tryPiped = async (useProxy: boolean) => {
+            try {
+                const targetUrl = useProxy ? wrapCORSGET(`${instance}/streams/${videoId}`) : `${instance}/streams/${videoId}`;
+                const res = await fetchWithTimeout(targetUrl, { mode: 'cors' });
+                if (res.ok) {
+                    const data = await res.json();
+                    const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
+                    if (streams?.length) {
+                        log(`Piped ${instance} SUCCESS`);
+                        return streams[0].url;
+                    }
                 }
-            }
-        } catch (e: any) { /* silent */ }
-        return null;
+            } catch (e: any) { /* silent */ }
+            return null;
+        };
+        // Strategy: Hit direct first (many have CORS), then proxy
+        return (await tryPiped(false)) || (await tryPiped(true));
     };
 
     const probeInvidious = async (instance: string): Promise<string | null> => {
         try {
-            // Invidious with local=true proxies the video itself through the instance
-            const res = await fetchWithTimeout(wrapCORS(`${instance}/api/v1/videos/${videoId}?local=true`), { mode: 'cors' });
+            const res = await fetchWithTimeout(wrapCORSGET(`${instance}/api/v1/videos/${videoId}?local=true`), { mode: 'cors' });
             if (res.ok) {
                 const data = await res.json();
                 const formats = (data.adaptiveFormats || []).concat(data.formatStreams || []);
@@ -129,9 +118,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     try {
-        log(`Hardened probe for ${videoId} (${type})...`);
-
-        // Parallel swarm: each promise rejects if it fails to find a URL
+        log(`Intelligence Probe 4.0 for ${videoId} (${type})...`);
         const wrapToReject = async (p: Promise<string | null>) => {
             const res = await p;
             if (!res) throw new Error("Fail");
@@ -139,17 +126,17 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
         };
 
         const strategies = [
-            ...COBALT_NODES.slice(0, 3).map(n => wrapToReject(probeCobalt(n))),
-            ...PIPED_NODES.slice(0, 6).map(n => wrapToReject(probePiped(n))),
+            ...COBALT_NODES.map(n => wrapToReject(probeCobalt(n))),
+            ...PIPED_NODES.slice(0, 8).map(n => wrapToReject(probePiped(n))),
             ...INVIDIOUS_NODES.slice(0, 4).map(n => wrapToReject(probeInvidious(n)))
         ];
 
         try {
             const firstSuccess = await Promise.any(strategies);
-            log("Swarm successful!");
+            log("Swarm success!");
             return { url: firstSuccess, logs };
         } catch (e) {
-            log("Swarm failed entirely.");
+            log("Swarm intelligence failed to find working node.");
         }
     } catch (err: any) {
         log(`Probe aborted: ${err.message}`);
