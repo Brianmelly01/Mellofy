@@ -7,17 +7,12 @@ export const maxDuration = 60;
 // ── Fresh Cobalt instances (Feb 2026 — from instances.cobalt.best) ──
 // ── Fresh Cobalt instances (Feb 2026 — from instances.cobalt.best) ──
 const COBALT_INSTANCES = [
-    "https://cobalt-api.meowing.de",       // 96% uptime
-    "https://cobalt-backend.canine.tools", // 92% uptime
     "https://kityune.imput.net",           // 76% uptime
     "https://nachos.imput.net",            // 76% uptime
     "https://blossom.imput.net",           // 76% uptime
     "https://capi.3kh0.net",              // 72% uptime
     "https://sunny.imput.net",            // 68% uptime
-    "https://downloadapi.stuff.solutions", // 44% uptime
     "https://cobalt.q69.xyz",
-    "https://co.wuk.sh",
-    "https://api.cobalt.tools",
 ];
 
 // ── Fresh Piped instances (Feb 2026) ──
@@ -185,7 +180,7 @@ async function extractViaYouTubeJS(
     videoId: string,
     type: string,
 ): Promise<{ url: string; title: string } | null> {
-    const clients = ['WEB', 'ANDROID', 'TV_EMBEDDED', 'IOS'] as const;
+    const clients = ['WEB', 'ANDROID', 'TV_EMBEDDED', 'IOS', 'YTMUSIC'] as const;
     let lastError: any = null;
 
     for (const clientName of clients) {
@@ -371,7 +366,7 @@ export async function GET(request: NextRequest) {
             if (!result && videoId) {
                 console.log("Phase 2: Cobalt fleet (parallel)...");
                 result = await raceInstances(
-                    COBALT_INSTANCES.slice(0, 5),
+                    COBALT_INSTANCES,
                     (inst) => tryCobalt(inst, videoId, mediaType),
                     "Cobalt"
                 );

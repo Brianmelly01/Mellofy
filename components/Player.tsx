@@ -20,6 +20,7 @@ import {
     CheckCircle2,
     AlertTriangle,
     ExternalLink,
+    Copy,
     Heart as HeartIcon
 } from "lucide-react";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
@@ -343,23 +344,34 @@ const Player = () => {
                                         <p className="text-[10px] text-white/30 mt-3 italic text-center">
                                             {hubStatus === 'scanning' ? "Bypassing restrictions via global fleet..." :
                                                 hubStatus === 'ready' ? "Acquisition successfully initiated." :
-                                                    "In-app extraction blocked. Try external methods:"}
+                                                    "Content restricted. Use the bridges below to acquire:"}
                                         </p>
                                     </div>
 
                                     {hubStatus === ('fallback' as any) && hubTrack && (
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-2">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    onClick={() => window.open(`https://cobalt.tools/#https://www.youtube.com/watch?v=${hubTrack.id}`, '_blank')}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
+                                                >
+                                                    <ExternalLink size={14} className="text-blue-400" /> Cobalt Web
+                                                </button>
+                                                <button
+                                                    onClick={() => window.open(`https://www.y2mate.com/youtube/${hubTrack.id}`, '_blank')}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
+                                                >
+                                                    <ExternalLink size={14} className="text-[#f13131]" /> Y2Mate
+                                                </button>
+                                            </div>
                                             <button
-                                                onClick={() => window.open(`https://cobalt.tools/#https://www.youtube.com/watch?v=${hubTrack.id}`, '_blank')}
-                                                className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${hubTrack.id}`);
+                                                    alert("YouTube URL copied to clipboard!");
+                                                }}
+                                                className="w-full flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
                                             >
-                                                <ExternalLink size={14} className="text-blue-400" /> Cobalt
-                                            </button>
-                                            <button
-                                                onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${hubTrack.id}`)}&f=mp3`, '_blank')}
-                                                className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
-                                            >
-                                                <ExternalLink size={14} className="text-amber-400" /> Loader.to
+                                                <Copy size={14} className="text-green-400" /> Copy YouTube Link
                                             </button>
                                         </div>
                                     )}
