@@ -366,7 +366,12 @@ const Player = () => {
 
                                     <button
                                         onClick={() => closeHub()}
-                                        className="w-full py-3 bg-[#1DB954] hover:bg-[#1ed760] rounded-xl text-black font-bold text-sm transition shadow-lg shadow-[#1DB954]/10"
+                                        className={cn(
+                                            "w-full py-3 rounded-xl font-bold text-sm transition shadow-lg",
+                                            hubStatus === ('fallback' as any)
+                                                ? "bg-white/10 hover:bg-white/20 text-white shadow-white/5"
+                                                : "bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-[#1DB954]/10"
+                                        )}
                                     >
                                         {hubStatus === ('fallback' as any) ? "Cancel" : "Close"}
                                     </button>
