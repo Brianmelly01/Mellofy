@@ -1,28 +1,26 @@
 
-// V6 DEEP SWARM — Verified nodes from instances.cobalt.best (Feb 2026)
+// Fresh instances (Feb 2026 — from instances.cobalt.best & community lists)
 export const PIPED_NODES = [
     "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
     "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
     "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
     "https://api.piped.yt", "https://pipedapi.r4fo.com",
-    "https://pipedapi.rivo.lol", "https://pipedapi.projectsegfau.lt",
-    "https://pipedapi.drgns.space", "https://pipedapi.official-halit.de",
-    "https://pipedapi.moe.moe", "https://pipedapi.tokyo.moe",
+    "https://pipedapi.rivo.lol",
 ];
 
 export const INVIDIOUS_NODES = [
     "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
-    "https://iv.melmac.space", "https://invidious.no-logs.com", "https://inv.riverside.rocks",
+    "https://iv.melmac.space", "https://invidious.no-logs.com",
 ];
 
 export const COBALT_NODES = [
-    "https://cobalt-api.meowing.de",      // 92% Health
-    "https://cobalt-backend.canine.tools", // 88% Health
-    "https://kityune.imput.net",          // 80% Health
-    "https://blossom.imput.net",          // 80% Health
-    "https://nachos.imput.net",           // 76% Health
-    "https://sunny.imput.net",            // 76% Health
-    "https://capi.3kh0.net",              // 72% Health
+    "https://cobalt-api.meowing.de",       // 96%
+    "https://cobalt-backend.canine.tools", // 92%
+    "https://kityune.imput.net",           // 76%
+    "https://blossom.imput.net",           // 76%
+    "https://nachos.imput.net",            // 76%
+    "https://capi.3kh0.net",              // 72%
+    "https://sunny.imput.net",            // 68%
 ];
 
 export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<{ url: string | null, logs: string[] }> => {
@@ -59,10 +57,9 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     const probeCobalt = async (instance: string): Promise<string | null> => {
-        const tryEndpoint = async (endpoint: string, useProxy: boolean = false) => {
+        const tryEndpoint = async (useProxy: boolean = false) => {
             try {
-                // Cobalt requires POST. CORSProxy.io is favored for POST stability.
-                const targetUrl = useProxy ? wrapCORSPOST(endpoint) : endpoint;
+                const targetUrl = useProxy ? wrapCORSPOST(instance) : instance;
                 const res = await fetchWithTimeout(targetUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "Accept": "application/json" },
@@ -70,14 +67,16 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                         url: `https://youtube.com/watch?v=${videoId}`,
                         downloadMode: type === 'audio' ? 'audio' : 'auto',
                         videoQuality: '720',
+                        youtubeVideoCodec: 'h264',
                     }),
                     mode: "cors",
                 }, useProxy ? 15000 : 8000);
 
                 if (res.ok) {
                     const d = await res.json();
+                    if (d.status === "error") return null;
                     if (d.url || d.picker?.[0]?.url) {
-                        log(`${instance} SUCCESS`);
+                        log(`Cobalt ${instance} SUCCESS`);
                         return d.url || d.picker?.[0]?.url;
                     }
                 }
@@ -85,7 +84,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             return null;
         };
 
-        return (await tryEndpoint(instance, false)) || (await tryEndpoint(instance, true));
+        return (await tryEndpoint(false)) || (await tryEndpoint(true));
     };
 
     const probePiped = async (instance: string): Promise<string | null> => {
@@ -98,12 +97,12 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                     const streams = type === 'audio' ? data.audioStreams : data.videoStreams;
                     if (streams?.length) {
                         log(`Piped ${instance} SUCCESS`);
-                        // Prefer high bitrate OPUS for audio
                         if (type === 'audio') {
                             const opus = streams.find((s: any) => s.codec === 'opus');
                             return (opus || streams[0]).url;
                         }
-                        return streams[0].url;
+                        const stream = streams.find((s: any) => s.quality === '720p') || streams[0];
+                        return stream.url;
                     }
                 }
             } catch (e: any) { /* silent */ }
@@ -120,7 +119,12 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
                 const formats = (data.adaptiveFormats || []).concat(data.formatStreams || []);
                 if (formats.length > 0) {
                     log(`Invidious ${instance} SUCCESS`);
-                    return formats[0].url;
+                    if (type === 'audio') {
+                        const audio = formats.find((f: any) => f.type?.includes('audio'));
+                        return (audio || formats[0]).url;
+                    }
+                    const video = formats.find((f: any) => f.type?.includes('video/mp4'));
+                    return (video || formats[0]).url;
                 }
             }
         } catch (e: any) { /* silent */ }
@@ -128,7 +132,7 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
     };
 
     try {
-        log(`Deep Swarm 6.0 for ${videoId} (${type})...`);
+        log(`Probing for ${videoId} (${type})...`);
         const wrapToReject = async (p: Promise<string | null>) => {
             const res = await p;
             if (!res) throw new Error("Fail");
@@ -137,22 +141,20 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
 
         const strategies = [
             ...COBALT_NODES.map(n => wrapToReject(probeCobalt(n))),
-            ...PIPED_NODES.slice(0, 10).map(n => wrapToReject(probePiped(n))),
-            ...INVIDIOUS_NODES.slice(0, 5).map(n => wrapToReject(probeInvidious(n)))
+            ...PIPED_NODES.slice(0, 6).map(n => wrapToReject(probePiped(n))),
+            ...INVIDIOUS_NODES.slice(0, 4).map(n => wrapToReject(probeInvidious(n)))
         ];
 
         try {
             const firstSuccess = await Promise.any(strategies);
-            log("Swarm success!");
+            log("Probe success!");
             return { url: firstSuccess, logs };
         } catch (e) {
-            log("Deep swarm exhausted all nodes.");
+            log("All probe nodes exhausted.");
         }
     } catch (err: any) {
-        log(`Swarm crash: ${err.message}`);
+        log(`Probe crash: ${err.message}`);
     }
 
     return { url: null, logs };
 };
-
-

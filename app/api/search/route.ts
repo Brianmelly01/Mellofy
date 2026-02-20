@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import YouTube from "youtube-sr";
+import Innertube, { UniversalCache } from "youtubei.js";
 
 const SEARCH_PROXIES = [
     "https://invidious.ducks.party",
@@ -46,42 +46,55 @@ export async function GET(request: NextRequest) {
     const trimmedQuery = query.trim();
 
     try {
-        // Strategy 1: youtube-sr
+        // Strategy 1: youtubei.js (Music Search)
         try {
-            const videos = await YouTube.search(trimmedQuery, {
-                type: "video",
-                limit: 20,
+            const yt = await Innertube.create({
+                retrieve_player: true,
+                generate_session_locally: true,
+                cache: new UniversalCache(false),
             });
 
-            if (videos && videos.length > 0) {
-                const results = videos.map((video) => {
-                    // Harden title extraction
-                    let title = video.title || "Untitled";
-                    if (title === "Untitled" && video.id) {
-                        // Sometimes the title is missing but we can at least try to search again or use a placeholder
-                        // but usually youtube-sr provides it.
+            const search = await yt.music.search(trimmedQuery, { type: 'video' });
+            if (!search.contents) {
+                throw new Error("No search results found");
+            }
+
+            const shelf = search.contents.find(s => s.type === 'MusicShelf') as any;
+
+            if (shelf && shelf.contents && shelf.contents.length > 0) {
+                const results = shelf.contents.map((item: any) => {
+                    // Extract title
+                    let title = item.title?.toString() || "Untitled";
+
+                    // Extract artist
+                    let artist = "Unknown Artist";
+                    if (item.artists && Array.isArray(item.artists)) {
+                        artist = item.artists.map((a: any) => a.name).join(", ");
+                    } else if (item.authors && Array.isArray(item.authors)) {
+                        artist = item.authors.map((a: any) => a.name).join(", ");
+                    } else if (item.author?.name) {
+                        artist = item.author.name;
                     }
 
-                    // Harden artist extraction (Topic channels often have - Topic in the name)
-                    let artist = video.channel?.name || "Unknown Artist";
+                    // Clean artist name
                     if (artist.endsWith(" - Topic")) {
                         artist = artist.replace(" - Topic", "");
                     }
 
                     return {
-                        id: video.id || "",
+                        id: item.id || "",
                         title,
                         artist,
-                        thumbnail: video.thumbnail?.url || "",
-                        url: video.url || "",
-                        duration: video.durationFormatted || "",
+                        thumbnail: item.thumbnail?.contents?.[0]?.url || "",
+                        url: `https://www.youtube.com/watch?v=${item.id}`,
+                        duration: item.duration?.toString() || "",
                         type: "video" as const,
                     };
                 });
                 return NextResponse.json({ results });
             }
         } catch (e) {
-            console.warn("youtube-sr search failed, trying fallback...", e);
+            console.warn("youtubei.js search failed, trying fallback...", e);
         }
 
         // Strategy 2: Invidious Search Fallback

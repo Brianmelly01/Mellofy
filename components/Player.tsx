@@ -157,25 +157,25 @@ const Player = () => {
         }
     };
 
-    // V4 ULTIMATE PROBE CONSTANTS
+    // Fresh instances (Feb 2026)
     const PIPED_NODES = [
-        "https://pipedapi.kavin.rocks", "https://api.piped.privacydev.net", "https://pipedapi.adminforge.de",
-        "https://pipedapi.leptons.xyz", "https://pipedapi.recloud.me", "https://piped-api.lunar.icu",
-        "https://api.piped.victr.me", "https://pipedapi.tokyo.kappa.host", "https://pipedapi.mha.fi",
-        "https://api.piped.projectsegfault.lt", "https://piped-api.loli.net", "https://pipedapi.moemoe.me"
+        "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
+        "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
+        "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
+        "https://api.piped.yt", "https://pipedapi.r4fo.com",
+        "https://pipedapi.rivo.lol"
     ];
 
     const INVIDIOUS_NODES = [
-        "https://vid.puffyan.us", "https://invidious.flokinet.to", "https://inv.vern.cc", "https://iv.ggtyler.dev",
-        "https://invidious.projectsegfau.lt", "https://iv.n0p.me", "https://invidious.namazso.eu", "https://inv.zzls.xyz",
-        "https://invidious.lunar.icu", "https://iv.nautile.io", "https://iv.libRedirect.eu", "https://invidious.privacydev.net",
-        "https://inv.nadeko.net", "https://yewtu.be", "https://invidious.nerdvpn.de", "https://inv.tux.pizza"
+        "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
+        "https://iv.melmac.space", "https://invidious.no-logs.com"
     ];
 
     const COBALT_NODES = [
-        "https://cobalt.tools", "https://co.wuk.sh", "https://cobalt.api.unblocker.it", "https://cobalt.q69.it",
-        "https://api.cobalt.tools", "https://cobalt-api.v06.me", "https://cobalt.sweet-pota.to", "https://cobaltt.tools",
-        "https://cobalt.canine.tools", "https://lc.vern.cc", "https://cobalt.meowing.de", "https://co.eepy.moe"
+        "https://cobalt-api.meowing.de", "https://cobalt-backend.canine.tools",
+        "https://kityune.imput.net", "https://blossom.imput.net",
+        "https://nachos.imput.net", "https://capi.3kh0.net",
+        "https://sunny.imput.net"
     ];
 
     const clientSideProbe = async (videoId: string, type: 'audio' | 'video'): Promise<string | null> => {
@@ -237,21 +237,23 @@ const Player = () => {
 
         const probeCobalt = async (instance: string): Promise<string | null> => {
             try {
-                // Phase 17: Relay Shotgun (Ultra-Robust)
-                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(`${instance}/api/json`)}&force=true`;
+                // Cobalt v10 API — POST to root endpoint
+                const bridgeUrl = `/api/download?action=proxy&url=${encodeURIComponent(instance)}&force=true`;
                 const payload = {
                     url: `https://youtube.com/watch?v=${videoId}`,
                     downloadMode: type === 'audio' ? 'audio' : 'auto',
+                    videoQuality: '720',
                     youtubeVideoCodec: 'h264'
                 };
                 const res = await fetchWithTimeout(bridgeUrl, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json", "Accept": "application/json" },
                     body: JSON.stringify(payload)
                 }, 12000).catch(() => null);
 
                 if (res && res.ok) {
                     const d = await res.json();
+                    if (d.status === 'error') return null;
                     return d.url || d.picker?.[0]?.url || null;
                 }
             } catch (e) { }
