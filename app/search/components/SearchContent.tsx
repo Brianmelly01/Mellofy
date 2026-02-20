@@ -49,93 +49,129 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     };
 
     const handleDownload = async (track: Track, type: 'audio' | 'video' | 'both') => {
+        const triggerBrowserDownload = (url: string, filename: string) => {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
         const downloadOne = async (targetType: 'audio' | 'video') => {
             setDownloadingId(track.id);
             setDownloadProgress(0);
-            let debugLogs: string[] = [];
+            const ext = targetType === 'audio' ? 'm4a' : 'mp4';
+            const filename = `${track.title.replace(/[^\w\s-]/g, '')}.${ext}`;
+            let lastFoundUrl: string | null = null;
 
+            // ── Phase 1: Server URL Extraction (server asks Cobalt/Piped for URL using their IPs) ──
             try {
-                // Phase 1: Client-Side Probe
-                console.log(`Phase 1: Probing client-side for ${targetType}...`);
+                console.log(`Phase 1: Server URL extraction for ${targetType}...`);
                 setDownloadProgress(10);
 
+                const res = await fetch(`/api/download?id=${track.id}&type=${targetType}&get_url=true`, {
+                    signal: AbortSignal.timeout(25000),
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.url) {
+                        console.log("Phase 1: Got URL from server, triggering download...");
+                        lastFoundUrl = data.url;
+                        setDownloadProgress(100);
+                        triggerBrowserDownload(data.url, data.filename || filename);
+                        setDownloadingId(null);
+                        setDownloadProgress(0);
+                        return;
+                    }
+                }
+                console.log("Phase 1: Server URL extraction failed, trying client probe...");
+            } catch (e: any) {
+                console.warn("Phase 1 error:", e?.message);
+            }
+
+            // ── Phase 2: Client-Side Probe (uses browser's residential IP) ──
+            try {
+                console.log(`Phase 2: Client-side probe for ${targetType}...`);
+                setDownloadProgress(30);
+
                 const probeResult = await clientSideProbe(track.id, targetType);
-                const directUrl = probeResult.url;
-                debugLogs = probeResult.logs;
-
-                // Phase 2: Direct Native Download
-                if (directUrl) {
-                    console.log("Phase 2: Triggering native browser download...", directUrl);
+                if (probeResult.url) {
+                    console.log("Phase 2: Client probe success, triggering download...");
+                    lastFoundUrl = probeResult.url;
                     setDownloadProgress(100);
-
-                    const link = document.createElement('a');
-                    link.href = directUrl;
-                    link.download = `${track.title}.${targetType === 'audio' ? 'mp3' : 'mp4'}`;
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-
+                    triggerBrowserDownload(probeResult.url, filename);
                     setDownloadingId(null);
                     setDownloadProgress(0);
                     return;
                 }
+                console.log("Phase 2: Client probe failed", probeResult.logs);
+            } catch (e: any) {
+                console.warn("Phase 2 error:", e?.message);
+            }
 
-                // Phase 3: Server Extraction Fallback
-                console.log("Phase 3: Client probe failed, engaging Server Extraction...", debugLogs);
-                setDownloadProgress(20);
+            // ── Phase 3: Server Pipe (stream entire file through Vercel — last resort) ──
+            try {
+                console.log(`Phase 3: Server pipe for ${targetType}...`);
+                setDownloadProgress(40);
 
-                const apiUrl = `/api/download?id=${track.id}&type=${targetType}&pipe=true&force=true`;
-                const response = await fetch(apiUrl);
+                const response = await fetch(`/api/download?id=${track.id}&type=${targetType}&pipe=true`, {
+                    signal: AbortSignal.timeout(55000),
+                });
 
-                if (!response.ok) {
-                    let serverError = `Server extraction failed (${response.status})`;
-                    try {
-                        const errBody = await response.json();
-                        if (errBody.error) serverError = errBody.error;
-                    } catch { /* ignore parse errors */ }
-                    throw new Error(serverError);
-                }
+                if (response.ok) {
+                    const reader = response.body?.getReader();
+                    if (reader) {
+                        const contentLength = response.headers.get('content-length');
+                        const total = contentLength ? parseInt(contentLength, 10) : 0;
+                        let loaded = 0;
+                        const chunks: BlobPart[] = [];
 
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error("Stream not available");
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            if (value) {
+                                chunks.push(value);
+                                loaded += value.length;
+                                if (total > 0) {
+                                    setDownloadProgress(40 + Math.floor((loaded / total) * 60));
+                                } else {
+                                    setDownloadProgress(Math.min(95, 40 + Math.floor(loaded / 500000)));
+                                }
+                            }
+                        }
 
-                const contentLength = response.headers.get('content-length');
-                const total = contentLength ? parseInt(contentLength, 10) : 0;
-                let loaded = 0;
-                const chunks: BlobPart[] = [];
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    if (value) {
-                        chunks.push(value);
-                        loaded += value.length;
-                        if (total > 0) {
-                            setDownloadProgress(20 + Math.floor((loaded / total) * 80));
-                        } else {
-                            setDownloadProgress(Math.min(95, 20 + Math.floor(loaded / 500000)));
+                        if (loaded > 0) {
+                            const blob = new Blob(chunks, { type: targetType === 'audio' ? 'audio/mp4' : 'video/mp4' });
+                            const blobUrl = URL.createObjectURL(blob);
+                            triggerBrowserDownload(blobUrl, filename);
+                            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                            setDownloadProgress(100);
+                            setDownloadingId(null);
+                            setDownloadProgress(0);
+                            return;
                         }
                     }
                 }
-
-                const blob = new Blob(chunks, { type: targetType === 'audio' ? 'audio/mp4' : 'video/mp4' });
-                const url = URL.createObjectURL(blob);
-                const aLink = document.createElement('a');
-                aLink.href = url;
-                aLink.download = `${track.title.replace(/[^\w\s-]/g, '')}.${targetType === 'audio' ? 'm4a' : 'mp4'}`;
-                aLink.style.display = 'none';
-                document.body.appendChild(aLink);
-                aLink.click();
-                document.body.removeChild(aLink);
-                setTimeout(() => URL.revokeObjectURL(url), 60000);
-                setDownloadProgress(100);
-
-            } catch (err: any) {
-                console.warn("Extraction details:", debugLogs);
-                throw err;
+                console.log("Phase 3: Server pipe failed");
+            } catch (e: any) {
+                console.warn("Phase 3 error:", e?.message);
             }
+
+            // ── Phase 4: If we found a URL in any phase but download didn't trigger, open in new tab ──
+            if (lastFoundUrl) {
+                console.log("Phase 4: Opening found URL in new tab...");
+                window.open(lastFoundUrl, '_blank');
+                setDownloadingId(null);
+                setDownloadProgress(0);
+                return;
+            }
+
+            // All automated methods failed
+            throw new Error("All extraction methods exhausted");
         };
 
         try {
