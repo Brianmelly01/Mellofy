@@ -26,6 +26,16 @@ interface PlayerState {
     setPlaybackMode: (mode: 'audio' | 'video') => void;
     playNext: () => void;
     playPrevious: () => void;
+
+    // Acquisition Hub
+    isHubOpen: boolean;
+    hubStatus: 'scanning' | 'ready' | 'fallback';
+    hubProgress: number;
+    hubTrack: Track | null;
+    openHub: (track: Track) => void;
+    closeHub: () => void;
+    setHubStatus: (status: 'scanning' | 'ready' | 'fallback') => void;
+    setHubProgress: (progress: number) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -36,12 +46,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     queue: [],
     playbackMode: 'audio',
 
+    isHubOpen: false,
+    hubStatus: 'scanning',
+    hubProgress: 0,
+    hubTrack: null,
+
     setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0 }),
     togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
     setVolume: (volume) => set({ volume }),
     setProgress: (progress) => set({ progress }),
     setQueue: (tracks) => set({ queue: tracks }),
     setPlaybackMode: (mode) => set({ playbackMode: mode }),
+
+    openHub: (track) => set({ isHubOpen: true, hubStatus: 'scanning', hubProgress: 0, hubTrack: track }),
+    closeHub: () => set({ isHubOpen: false }),
+    setHubStatus: (status) => set({ hubStatus: status }),
+    setHubProgress: (progress) => set({ hubProgress: progress }),
 
     playNext: () => {
         const { queue, currentTrack } = get();

@@ -9,12 +9,19 @@ interface SearchContentProps {
 }
 
 const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
-    const { setTrack, setPlaybackMode, setQueue } = usePlayerStore();
+    const {
+        setTrack,
+        setPlaybackMode,
+        setQueue,
+        openHub,
+        closeHub,
+        setHubStatus,
+        setHubProgress,
+        hubProgress
+    } = usePlayerStore();
     const [results, setResults] = useState<Track[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [downloadingId, setDownloadingId] = useState<string | null>(null);
-    const [downloadProgress, setDownloadProgress] = useState(0);
 
     useEffect(() => {
         if (!term) {
@@ -47,72 +54,61 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     };
 
     const handleDownload = async (track: Track, type: 'audio' | 'video' | 'both') => {
+        openHub(track);
+
         const triggerBrowserDownload = (url: string, filename: string) => {
             const link = document.createElement('a');
             link.href = url;
             link.download = filename;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         };
 
         const downloadOne = async (targetType: 'audio' | 'video') => {
-            setDownloadingId(track.id);
-            setDownloadProgress(0);
+            setHubProgress(Math.min(hubProgress + 15, 85));
             const ext = targetType === 'audio' ? 'm4a' : 'mp4';
             const filename = `${track.title.replace(/[^\w\s-]/g, '')}.${ext}`;
 
-            // ── Phase 1: Quick Server Extraction (8s timeout — fast fail) ──
             try {
-                console.log(`Phase 1: Quick server extraction for ${targetType}...`);
-                setDownloadProgress(20);
-
                 const res = await fetch(`/api/download?id=${track.id}&type=${targetType}&get_url=true`, {
-                    signal: AbortSignal.timeout(8000),
+                    signal: AbortSignal.timeout(35000),
                 });
 
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) {
-                        console.log("Phase 1: Got URL, triggering download!");
-                        setDownloadProgress(100);
+                        setHubProgress(100);
                         triggerBrowserDownload(data.url, data.filename || filename);
-                        setDownloadingId(null);
-                        setDownloadProgress(0);
-                        return;
+                        return true;
                     }
                 }
             } catch (e: any) {
-                console.warn("Phase 1 fast-fail:", e?.message);
+                console.warn("Extraction failed:", e?.message);
             }
-
-            // ── Phase 2: Direct Cobalt Redirect (reliable — Cobalt handles everything) ──
-            console.log("Phase 2: Redirecting to Cobalt...");
-            setDownloadProgress(100);
-
-            // Cobalt web accepts #URL format for pre-filling
-            const cobaltUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${track.id}`;
-            window.open(cobaltUrl, '_blank', 'noopener,noreferrer');
-
-            setDownloadingId(null);
-            setDownloadProgress(0);
+            return false;
         };
 
         try {
+            let success = false;
             if (type === 'both') {
-                await downloadOne('audio');
+                const s1 = await downloadOne('audio');
                 await new Promise(r => setTimeout(r, 1000));
-                await downloadOne('video');
+                const s2 = await downloadOne('video');
+                success = s1 || s2;
             } else {
-                await downloadOne(type);
+                success = await downloadOne(type);
+            }
+
+            if (success) {
+                setHubProgress(100);
+                setHubStatus('ready');
+            } else {
+                setHubStatus('fallback');
             }
         } catch (err: any) {
             console.error("Download error:", err);
-        } finally {
-            setDownloadingId(null);
-            setDownloadProgress(0);
+            setHubStatus('fallback');
         }
     };
 
@@ -182,60 +178,51 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                         </div>
 
                         <div className="flex items-center gap-x-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0 pr-2">
-                            {downloadingId === song.id ? (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-green-600/20 rounded-full border border-green-500/20">
-                                    <Loader2 size={16} className="animate-spin text-green-400" />
-                                    <span className="text-xs text-green-400 font-bold">{downloadProgress}%</span>
+                            <button
+                                onClick={() => handlePlay(song, 'audio')}
+                                className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10"
+                                title="Play Audio"
+                            >
+                                <Music size={18} strokeWidth={2.5} />
+                            </button>
+                            <button
+                                onClick={() => handlePlay(song, 'video')}
+                                className="p-3 pulsar-bg hover:scale-105 rounded-full text-white transition-all shadow-lg shadow-purple-500/20"
+                                title="Play Video"
+                            >
+                                <Video size={18} strokeWidth={2.5} />
+                            </button>
+                            <div className="relative group/download">
+                                <button
+                                    className="p-3 bg-green-600/20 hover:bg-green-600/30 rounded-full text-green-400 transition-all border border-green-500/20"
+                                    title="Download"
+                                >
+                                    <Download size={18} strokeWidth={2.5} />
+                                </button>
+                                <div className="absolute right-0 bottom-full mb-2 bg-neutral-900 border border-white/10 rounded-xl p-1 shadow-2xl min-w-[130px] opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
+                                    <button
+                                        onClick={() => handleDownload(song, 'audio')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
+                                    >
+                                        <Music size={14} />
+                                        Audio
+                                    </button>
+                                    <button
+                                        onClick={() => handleDownload(song, 'video')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
+                                    >
+                                        <Video size={14} />
+                                        Video
+                                    </button>
+                                    <button
+                                        onClick={() => handleDownload(song, 'both')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-green-400 font-bold whitespace-nowrap"
+                                    >
+                                        <Download size={14} />
+                                        Both
+                                    </button>
                                 </div>
-                            ) : (
-                                <>
-                                    <button
-                                        onClick={() => handlePlay(song, 'audio')}
-                                        className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10"
-                                        title="Play Audio"
-                                    >
-                                        <Music size={18} strokeWidth={2.5} />
-                                    </button>
-                                    <button
-                                        onClick={() => handlePlay(song, 'video')}
-                                        className="p-3 pulsar-bg hover:scale-105 rounded-full text-white transition-all shadow-lg shadow-purple-500/20"
-                                        title="Play Video"
-                                    >
-                                        <Video size={18} strokeWidth={2.5} />
-                                    </button>
-                                    <div className="relative group/download">
-                                        <button
-                                            className="p-3 bg-green-600/20 hover:bg-green-600/30 rounded-full text-green-400 transition-all border border-green-500/20"
-                                            title="Download"
-                                        >
-                                            <Download size={18} strokeWidth={2.5} />
-                                        </button>
-                                        <div className="absolute right-0 bottom-full mb-2 bg-neutral-900 border border-white/10 rounded-xl p-1 shadow-2xl min-w-[130px] opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-50">
-                                            <button
-                                                onClick={() => handleDownload(song, 'audio')}
-                                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
-                                            >
-                                                <Music size={14} />
-                                                Audio
-                                            </button>
-                                            <button
-                                                onClick={() => handleDownload(song, 'video')}
-                                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white whitespace-nowrap"
-                                            >
-                                                <Video size={14} />
-                                                Video
-                                            </button>
-                                            <button
-                                                onClick={() => handleDownload(song, 'both')}
-                                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-green-400 font-bold whitespace-nowrap"
-                                            >
-                                                <Download size={14} />
-                                                Both
-                                            </button>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            </div>
                         </div>
                     </div>
                 ))}

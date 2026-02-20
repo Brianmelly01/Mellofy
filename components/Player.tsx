@@ -18,6 +18,8 @@ import {
     X,
     Loader2,
     CheckCircle2,
+    AlertTriangle,
+    ExternalLink,
     Heart as HeartIcon
 } from "lucide-react";
 import { usePlayerStore } from "@/lib/store/usePlayerStore";
@@ -40,18 +42,21 @@ const Player = () => {
         playPrevious,
         progress,
         playbackMode,
-        setPlaybackMode
+        setPlaybackMode,
+        isHubOpen,
+        hubStatus,
+        hubProgress,
+        hubTrack,
+        openHub,
+        closeHub,
+        setHubStatus,
+        setHubProgress
     } = usePlayerStore();
 
     const [isMuted, setIsMuted] = useState(false);
     const [prevVolume, setPrevVolume] = useState(volume);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const downloadMenuRef = useRef<HTMLDivElement>(null);
-
-    // Acquisition Hub States
-    const [isHubOpen, setIsHubOpen] = useState(false);
-    const [hubStatus, setHubStatus] = useState<'scanning' | 'ready'>('scanning');
-    const [downloadProgress, setDownloadProgress] = useState<number>(0);
 
     // Close download menu when clicking outside
     useEffect(() => {
@@ -84,52 +89,55 @@ const Player = () => {
     };
 
     const handleDownload = async (type: 'audio' | 'video' | 'both') => {
-        if (!storeTrack) return;
+        const track = storeTrack || hubTrack;
+        if (!track) return;
 
-        setIsHubOpen(true);
-        setHubStatus('scanning');
-        setDownloadProgress(0);
+        openHub(track);
         setShowDownloadMenu(false);
 
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
-            setDownloadProgress(prev => Math.min(prev + 20, 90));
-            const filename = `${storeTrack.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'm4a' : 'mp4'}`;
+            setHubProgress(Math.min(hubProgress + 15, 85));
+            const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'm4a' : 'mp4'}`;
 
-            // Phase 1: Quick Server sync (8s)
             try {
-                const res = await fetch(`/api/download?id=${storeTrack.id}&type=${t}&get_url=true`, {
-                    signal: AbortSignal.timeout(8000),
+                const res = await fetch(`/api/download?id=${track.id}&type=${t}&get_url=true`, {
+                    signal: AbortSignal.timeout(35000),
                 });
 
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) {
+                        setHubProgress(100);
                         triggerLink(data.url, data.filename || filename);
-                        return;
+                        return true;
                     }
                 }
             } catch (e) {
-                console.warn(`Phase 1 fallback for ${t}`);
+                console.warn(`Extraction failed for ${t}`);
             }
-
-            // Phase 2: Cobalt Redirect
-            const cobaltUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${storeTrack.id}`;
-            window.open(cobaltUrl, '_blank', 'noopener,noreferrer');
+            return false;
         };
 
         try {
+            let success = false;
             if (type === 'both') {
-                await attemptDownloadOne('audio');
+                const s1 = await attemptDownloadOne('audio');
                 await new Promise(r => setTimeout(r, 1000));
-                await attemptDownloadOne('video');
+                const s2 = await attemptDownloadOne('video');
+                success = s1 || s2;
             } else {
-                await attemptDownloadOne(type);
+                success = await attemptDownloadOne(type);
             }
-            setDownloadProgress(100);
-            setHubStatus('ready');
+
+            if (success) {
+                setHubProgress(100);
+                setHubStatus('ready');
+            } else {
+                setHubStatus('fallback');
+            }
         } catch (err) {
             console.error("Acquisition error:", err);
-            setHubStatus('ready');
+            setHubStatus('fallback');
         }
     };
 
@@ -293,7 +301,7 @@ const Player = () => {
                                     </div>
                                     <h2 className="text-xl font-bold">Acquisition Hub</h2>
                                     <button
-                                        onClick={() => setIsHubOpen(false)}
+                                        onClick={() => closeHub()}
                                         className="ml-auto p-1 hover:bg-white/10 rounded-full transition text-white/40 hover:text-white"
                                     >
                                         <X size={20} />
@@ -309,30 +317,58 @@ const Player = () => {
                                                     <Loader2 size={14} className="animate-spin" />
                                                     <span className="text-[10px] font-bold uppercase tracking-wider">Acquiring</span>
                                                 </div>
-                                            ) : (
+                                            ) : hubStatus === 'ready' ? (
                                                 <div className="flex items-center gap-1.5 text-[#1DB954]">
                                                     <CheckCircle2 size={14} />
                                                     <span className="text-[10px] font-bold uppercase tracking-wider">Completed</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1.5 text-amber-500">
+                                                    <AlertTriangle size={14} />
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider">Fallback</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-4">
                                             <motion.div
-                                                className={cn("h-full transition-all duration-300", hubStatus === 'scanning' ? "bg-blue-500" : "bg-[#1DB954]")}
-                                                animate={{ width: `${downloadProgress}%` }}
+                                                className={cn(
+                                                    "h-full transition-all duration-300",
+                                                    hubStatus === 'scanning' ? "bg-blue-500" :
+                                                        hubStatus === 'ready' ? "bg-[#1DB954]" : "bg-amber-500"
+                                                )}
+                                                animate={{ width: `${hubProgress}%` }}
                                             />
                                         </div>
                                         <p className="text-[10px] text-white/30 mt-3 italic text-center">
-                                            {hubStatus === 'scanning' ? "Bypassing restrictions via global fleet..." : "Acquisition successfully initiated."}
+                                            {hubStatus === 'scanning' ? "Bypassing restrictions via global fleet..." :
+                                                hubStatus === 'ready' ? "Acquisition successfully initiated." :
+                                                    "In-app extraction blocked. Try external methods:"}
                                         </p>
                                     </div>
 
+                                    {hubStatus === ('fallback' as any) && storeTrack && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => window.open(`https://cobalt.tools/#https://www.youtube.com/watch?v=${storeTrack.id}`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
+                                            >
+                                                <ExternalLink size={14} className="text-blue-400" /> Cobalt
+                                            </button>
+                                            <button
+                                                onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${storeTrack.id}`)}&f=mp3`, '_blank')}
+                                                className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
+                                            >
+                                                <ExternalLink size={14} className="text-amber-400" /> Loader.to
+                                            </button>
+                                        </div>
+                                    )}
+
                                     <button
-                                        onClick={() => setIsHubOpen(false)}
+                                        onClick={() => closeHub()}
                                         className="w-full py-3 bg-[#1DB954] hover:bg-[#1ed760] rounded-xl text-black font-bold text-sm transition shadow-lg shadow-[#1DB954]/10"
                                     >
-                                        Close
+                                        {hubStatus === ('fallback' as any) ? "Cancel" : "Close"}
                                     </button>
                                 </div>
                             </div>

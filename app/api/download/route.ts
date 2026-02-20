@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // ── Fresh Cobalt instances (Feb 2026 — from instances.cobalt.best) ──
+// ── Fresh Cobalt instances (Feb 2026 — from instances.cobalt.best) ──
 const COBALT_INSTANCES = [
     "https://cobalt-api.meowing.de",       // 96% uptime
     "https://cobalt-backend.canine.tools", // 92% uptime
@@ -14,6 +15,9 @@ const COBALT_INSTANCES = [
     "https://capi.3kh0.net",              // 72% uptime
     "https://sunny.imput.net",            // 68% uptime
     "https://downloadapi.stuff.solutions", // 44% uptime
+    "https://cobalt.q69.xyz",
+    "https://co.wuk.sh",
+    "https://api.cobalt.tools",
 ];
 
 // ── Fresh Piped instances (Feb 2026) ──
