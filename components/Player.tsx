@@ -96,7 +96,7 @@ const Player = () => {
         setShowDownloadMenu(false);
 
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
-            setHubProgress(Math.min(hubProgress + 15, 85));
+            setHubProgress((prev) => Math.min(prev + 15, 85));
             const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'm4a' : 'mp4'}`;
 
             try {
@@ -347,16 +347,16 @@ const Player = () => {
                                         </p>
                                     </div>
 
-                                    {hubStatus === ('fallback' as any) && storeTrack && (
+                                    {hubStatus === ('fallback' as any) && hubTrack && (
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
-                                                onClick={() => window.open(`https://cobalt.tools/#https://www.youtube.com/watch?v=${storeTrack.id}`, '_blank')}
+                                                onClick={() => window.open(`https://cobalt.tools/#https://www.youtube.com/watch?v=${hubTrack.id}`, '_blank')}
                                                 className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
                                             >
                                                 <ExternalLink size={14} className="text-blue-400" /> Cobalt
                                             </button>
                                             <button
-                                                onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${storeTrack.id}`)}&f=mp3`, '_blank')}
+                                                onClick={() => window.open(`https://loader.to/api/button/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${hubTrack.id}`)}&f=mp3`, '_blank')}
                                                 className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
                                             >
                                                 <ExternalLink size={14} className="text-amber-400" /> Loader.to

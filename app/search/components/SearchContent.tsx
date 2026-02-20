@@ -66,7 +66,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         };
 
         const downloadOne = async (targetType: 'audio' | 'video') => {
-            setHubProgress(Math.min(hubProgress + 15, 85));
+            setHubProgress((prev) => Math.min(prev + 15, 85));
             const ext = targetType === 'audio' ? 'm4a' : 'mp4';
             const filename = `${track.title.replace(/[^\w\s-]/g, '')}.${ext}`;
 
