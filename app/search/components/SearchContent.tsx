@@ -1,9 +1,8 @@
 "use client";
 
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
-import { Play, Video, Music, Loader2, Download, X, ExternalLink } from "lucide-react";
+import { Video, Music, Loader2, Download } from "lucide-react";
 import { useEffect, useState } from "react";
-import { clientSideProbe } from "@/lib/download-helper";
 
 interface SearchContentProps {
     term?: string;
@@ -16,7 +15,6 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     const [error, setError] = useState("");
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [downloadProgress, setDownloadProgress] = useState(0);
-    const [fallbackModal, setFallbackModal] = useState<{ open: boolean; trackId: string; trackTitle: string }>({ open: false, trackId: "", trackTitle: "" });
 
     useEffect(() => {
         if (!term) {
@@ -65,22 +63,20 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             setDownloadProgress(0);
             const ext = targetType === 'audio' ? 'm4a' : 'mp4';
             const filename = `${track.title.replace(/[^\w\s-]/g, '')}.${ext}`;
-            let lastFoundUrl: string | null = null;
 
-            // ── Phase 1: Server URL Extraction (server asks Cobalt/Piped for URL using their IPs) ──
+            // ── Phase 1: Quick Server Extraction (8s timeout — fast fail) ──
             try {
-                console.log(`Phase 1: Server URL extraction for ${targetType}...`);
-                setDownloadProgress(10);
+                console.log(`Phase 1: Quick server extraction for ${targetType}...`);
+                setDownloadProgress(20);
 
                 const res = await fetch(`/api/download?id=${track.id}&type=${targetType}&get_url=true`, {
-                    signal: AbortSignal.timeout(25000),
+                    signal: AbortSignal.timeout(8000),
                 });
 
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) {
-                        console.log("Phase 1: Got URL from server, triggering download...");
-                        lastFoundUrl = data.url;
+                        console.log("Phase 1: Got URL, triggering download!");
                         setDownloadProgress(100);
                         triggerBrowserDownload(data.url, data.filename || filename);
                         setDownloadingId(null);
@@ -88,90 +84,20 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                         return;
                     }
                 }
-                console.log("Phase 1: Server URL extraction failed, trying client probe...");
             } catch (e: any) {
-                console.warn("Phase 1 error:", e?.message);
+                console.warn("Phase 1 fast-fail:", e?.message);
             }
 
-            // ── Phase 2: Client-Side Probe (uses browser's residential IP) ──
-            try {
-                console.log(`Phase 2: Client-side probe for ${targetType}...`);
-                setDownloadProgress(30);
+            // ── Phase 2: Direct Cobalt Redirect (reliable — Cobalt handles everything) ──
+            console.log("Phase 2: Redirecting to Cobalt...");
+            setDownloadProgress(100);
 
-                const probeResult = await clientSideProbe(track.id, targetType);
-                if (probeResult.url) {
-                    console.log("Phase 2: Client probe success, triggering download...");
-                    lastFoundUrl = probeResult.url;
-                    setDownloadProgress(100);
-                    triggerBrowserDownload(probeResult.url, filename);
-                    setDownloadingId(null);
-                    setDownloadProgress(0);
-                    return;
-                }
-                console.log("Phase 2: Client probe failed", probeResult.logs);
-            } catch (e: any) {
-                console.warn("Phase 2 error:", e?.message);
-            }
+            // Cobalt web accepts #URL format for pre-filling
+            const cobaltUrl = `https://cobalt.tools/#https://www.youtube.com/watch?v=${track.id}`;
+            window.open(cobaltUrl, '_blank', 'noopener,noreferrer');
 
-            // ── Phase 3: Server Pipe (stream entire file through Vercel — last resort) ──
-            try {
-                console.log(`Phase 3: Server pipe for ${targetType}...`);
-                setDownloadProgress(40);
-
-                const response = await fetch(`/api/download?id=${track.id}&type=${targetType}&pipe=true`, {
-                    signal: AbortSignal.timeout(55000),
-                });
-
-                if (response.ok) {
-                    const reader = response.body?.getReader();
-                    if (reader) {
-                        const contentLength = response.headers.get('content-length');
-                        const total = contentLength ? parseInt(contentLength, 10) : 0;
-                        let loaded = 0;
-                        const chunks: BlobPart[] = [];
-
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
-                            if (value) {
-                                chunks.push(value);
-                                loaded += value.length;
-                                if (total > 0) {
-                                    setDownloadProgress(40 + Math.floor((loaded / total) * 60));
-                                } else {
-                                    setDownloadProgress(Math.min(95, 40 + Math.floor(loaded / 500000)));
-                                }
-                            }
-                        }
-
-                        if (loaded > 0) {
-                            const blob = new Blob(chunks, { type: targetType === 'audio' ? 'audio/mp4' : 'video/mp4' });
-                            const blobUrl = URL.createObjectURL(blob);
-                            triggerBrowserDownload(blobUrl, filename);
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-                            setDownloadProgress(100);
-                            setDownloadingId(null);
-                            setDownloadProgress(0);
-                            return;
-                        }
-                    }
-                }
-                console.log("Phase 3: Server pipe failed");
-            } catch (e: any) {
-                console.warn("Phase 3 error:", e?.message);
-            }
-
-            // ── Phase 4: If we found a URL in any phase but download didn't trigger, open in new tab ──
-            if (lastFoundUrl) {
-                console.log("Phase 4: Opening found URL in new tab...");
-                window.open(lastFoundUrl, '_blank');
-                setDownloadingId(null);
-                setDownloadProgress(0);
-                return;
-            }
-
-            // All automated methods failed
-            throw new Error("All extraction methods exhausted");
+            setDownloadingId(null);
+            setDownloadProgress(0);
         };
 
         try {
@@ -184,8 +110,6 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             }
         } catch (err: any) {
             console.error("Download error:", err);
-            // Show styled fallback modal instead of confirm()
-            setFallbackModal({ open: true, trackId: track.id, trackTitle: track.title });
         } finally {
             setDownloadingId(null);
             setDownloadProgress(0);
@@ -316,94 +240,6 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                     </div>
                 ))}
             </div>
-
-            {/* Fallback Download Modal */}
-            {fallbackModal.open && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="relative w-full max-w-sm bg-[#181818] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        <button
-                            onClick={() => setFallbackModal({ open: false, trackId: "", trackTitle: "" })}
-                            className="absolute top-3 right-3 p-2 hover:bg-white/10 rounded-full transition text-white/60 hover:text-white z-10"
-                        >
-                            <X size={18} />
-                        </button>
-
-                        <div className="p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-amber-500/20 rounded-lg">
-                                    <Download size={20} className="text-amber-400" />
-                                </div>
-                                <div>
-                                    <h3 className="text-base font-bold text-white">Download Blocked</h3>
-                                    <p className="text-[11px] text-white/40">Automated extraction failed</p>
-                                </div>
-                            </div>
-
-                            <p className="text-xs text-white/50 mb-4 leading-relaxed">
-                                This video is restricted and couldn&apos;t be extracted automatically. Use one of these trusted tools to download directly:
-                            </p>
-
-                            <div className="space-y-2">
-                                <a
-                                    href={`https://cobalt.tools/#https://www.youtube.com/watch?v=${fallbackModal.trackId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-3 w-full p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 hover:border-white/10 transition group"
-                                >
-                                    <ExternalLink size={16} className="text-blue-400 group-hover:text-blue-300 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-white">Cobalt.tools</p>
-                                        <p className="text-[10px] text-white/30">Recommended — Pre-filled URL</p>
-                                    </div>
-                                </a>
-
-                                <a
-                                    href={`https://cobalt.canine.tools/#https://www.youtube.com/watch?v=${fallbackModal.trackId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-3 w-full p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 hover:border-white/10 transition group"
-                                >
-                                    <ExternalLink size={16} className="text-purple-400 group-hover:text-purple-300 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-white">Cobalt Mirror</p>
-                                        <p className="text-[10px] text-white/30">Alternative Cobalt instance</p>
-                                    </div>
-                                </a>
-
-                                <a
-                                    href={`https://piped.video/watch?v=${fallbackModal.trackId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-3 w-full p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 hover:border-white/10 transition group"
-                                >
-                                    <ExternalLink size={16} className="text-green-400 group-hover:text-green-300 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-white">Piped.video</p>
-                                        <p className="text-[10px] text-white/30">Privacy-focused YouTube frontend</p>
-                                    </div>
-                                </a>
-
-                                <a
-                                    href={`https://yewtu.be/watch?v=${fallbackModal.trackId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-3 w-full p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 hover:border-white/10 transition group"
-                                >
-                                    <ExternalLink size={16} className="text-amber-400 group-hover:text-amber-300 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-white">Invidious (yewtu.be)</p>
-                                        <p className="text-[10px] text-white/30">Last resort fallback</p>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
-
-                        <div className="px-6 py-3 bg-white/5 border-t border-white/5">
-                            <p className="text-[10px] text-white/20 text-center">Opens in a new tab • No ads</p>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };
