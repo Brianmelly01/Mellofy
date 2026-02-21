@@ -7,11 +7,9 @@ export const maxDuration = 60;
 // ── Fresh Cobalt instances (Feb 2026 — from instances.cobalt.best) ──
 // ── Fresh Cobalt instances (Feb 2026 — from instances.cobalt.best) ──
 const COBALT_INSTANCES = [
-    "https://kityune.imput.net",           // 76% uptime
-    "https://nachos.imput.net",            // 76% uptime
-    "https://blossom.imput.net",           // 76% uptime
-    "https://capi.3kh0.net",              // 72% uptime
-    "https://sunny.imput.net",            // 68% uptime
+    "https://kityune.imput.net",
+    "https://nachos.imput.net",
+    "https://blossom.imput.net",
     "https://cobalt.q69.xyz",
 ];
 
@@ -26,6 +24,8 @@ const PIPED_INSTANCES = [
     "https://api.piped.yt",
     "https://pipedapi.r4fo.com",
     "https://pipedapi.rivo.lol",
+    "https://pipedapi.darkness.services",
+    "https://pipedapi.syndr.org",
 ];
 
 // ── Fresh Invidious instances (Feb 2026) ──
@@ -35,6 +35,8 @@ const INVIDIOUS_INSTANCES = [
     "https://yewtu.be",
     "https://iv.melmac.space",
     "https://invidious.no-logs.com",
+    "https://iv.ggtyler.dev",
+    "https://invidious.drgns.space",
 ];
 
 const STABLE_FALLBACKS = [

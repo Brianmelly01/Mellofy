@@ -32,6 +32,8 @@ interface AcquisitionResults {
     video: { url: string; filename: string } | null;
 }
 
+import { clientSideProbe } from "@/lib/download-helper";
+
 const Player = () => {
     const {
         currentTrack: storeTrack,
@@ -97,12 +99,13 @@ const Player = () => {
         setShowDownloadMenu(false);
 
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
-            setHubProgress((prev) => Math.min(prev + 15, 85));
+            setHubProgress((prev) => Math.min(prev + 10, 30));
             const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'm4a' : 'mp4'}`;
 
+            // Phase 1: Try Server-side API (Piping)
             try {
                 const res = await fetch(`/api/download?id=${track.id}&type=${t}&get_url=true`, {
-                    signal: AbortSignal.timeout(35000),
+                    signal: AbortSignal.timeout(15000),
                 });
 
                 if (res.ok) {
@@ -114,8 +117,23 @@ const Player = () => {
                     }
                 }
             } catch (e) {
-                console.warn(`Extraction failed for ${t}`);
+                console.warn(`Server extraction failed for ${t}, trying client-side probe...`);
             }
+
+            // Phase 2: Client-side probe (much more robust)
+            setHubProgress(45);
+            try {
+                const { url, logs } = await clientSideProbe(track.id, t);
+                if (url) {
+                    console.log(`Client-side probe success: ${url}`);
+                    setHubProgress(100);
+                    triggerLink(url, filename);
+                    return true;
+                }
+            } catch (err) {
+                console.error("Client-side probe crash:", err);
+            }
+
             return false;
         };
 
@@ -123,7 +141,8 @@ const Player = () => {
             let success = false;
             if (type === 'both') {
                 const s1 = await attemptDownloadOne('audio');
-                await new Promise(r => setTimeout(r, 1000));
+                setHubProgress(50);
+                await new Promise(r => setTimeout(r, 800));
                 const s2 = await attemptDownloadOne('video');
                 success = s1 || s2;
             } else {
@@ -133,6 +152,7 @@ const Player = () => {
             if (success) {
                 setHubProgress(100);
                 setHubStatus('ready');
+                setTimeout(() => closeHub(), 2500);
             } else {
                 setHubStatus('fallback');
             }

@@ -1,16 +1,27 @@
 
 // Fresh instances (Feb 2026 — from instances.cobalt.best & community lists)
 export const PIPED_NODES = [
-    "https://pipedapi.kavin.rocks", "https://pipedapi.adminforge.de",
-    "https://pipedapi.leptons.xyz", "https://piped-api.lunar.icu",
-    "https://pipedapi.mha.fi", "https://pipedapi.garudalinux.org",
-    "https://api.piped.yt", "https://pipedapi.r4fo.com",
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://pipedapi.leptons.xyz",
+    "https://piped-api.lunar.icu",
+    "https://pipedapi.mha.fi",
+    "https://pipedapi.garudalinux.org",
+    "https://api.piped.yt",
     "https://pipedapi.rivo.lol",
+    "https://pipedapi.r4fo.com",
+    "https://pipedapi.darkness.services",
+    "https://pipedapi.syndr.org",
 ];
 
 export const INVIDIOUS_NODES = [
-    "https://inv.nadeko.net", "https://invidious.nerdvpn.de", "https://yewtu.be",
-    "https://iv.melmac.space", "https://invidious.no-logs.com",
+    "https://inv.nadeko.net",
+    "https://invidious.nerdvpn.de",
+    "https://yewtu.be",
+    "https://iv.melmac.space",
+    "https://invidious.no-logs.com",
+    "https://iv.ggtyler.dev",
+    "https://invidious.drgns.space",
 ];
 
 export const COBALT_NODES = [
@@ -50,8 +61,10 @@ export const clientSideProbe = async (videoId: string, type: 'audio' | 'video'):
             (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
             (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
             (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`,
+            (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
         ];
-        const index = Math.abs(url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0)) % proxies.length;
+        const hash = url.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0);
+        const index = Math.abs(hash) % proxies.length;
         return proxies[index](url);
     };
 

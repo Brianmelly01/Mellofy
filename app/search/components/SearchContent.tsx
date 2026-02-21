@@ -3,6 +3,7 @@
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { Video, Music, Loader2, Download } from "lucide-react";
 import { useEffect, useState } from "react";
+import { clientSideProbe } from "@/lib/download-helper";
 
 interface SearchContentProps {
     term?: string;
@@ -66,13 +67,14 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         };
 
         const downloadOne = async (targetType: 'audio' | 'video') => {
-            setHubProgress((prev) => Math.min(prev + 15, 85));
+            setHubProgress((prev) => Math.min(prev + 10, 30));
             const ext = targetType === 'audio' ? 'm4a' : 'mp4';
             const filename = `${track.title.replace(/[^\w\s-]/g, '')}.${ext}`;
 
+            // Phase 1: Try Server-side extraction
             try {
                 const res = await fetch(`/api/download?id=${track.id}&type=${targetType}&get_url=true`, {
-                    signal: AbortSignal.timeout(35000),
+                    signal: AbortSignal.timeout(15000),
                 });
 
                 if (res.ok) {
@@ -84,8 +86,22 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                     }
                 }
             } catch (e: any) {
-                console.warn("Extraction failed:", e?.message);
+                console.warn("Server-side extraction failed:", e?.message);
             }
+
+            // Phase 2: Client-side probe
+            setHubProgress(45);
+            try {
+                const { url } = await clientSideProbe(track.id, targetType);
+                if (url) {
+                    setHubProgress(100);
+                    triggerBrowserDownload(url, filename);
+                    return true;
+                }
+            } catch (e: any) {
+                console.warn("Client-side probe failed:", e?.message);
+            }
+
             return false;
         };
 
@@ -93,7 +109,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             let success = false;
             if (type === 'both') {
                 const s1 = await downloadOne('audio');
-                await new Promise(r => setTimeout(r, 1000));
+                setHubProgress(50);
+                await new Promise(r => setTimeout(r, 800));
                 const s2 = await downloadOne('video');
                 success = s1 || s2;
             } else {
@@ -103,6 +120,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
             if (success) {
                 setHubProgress(100);
                 setHubStatus('ready');
+                setTimeout(() => closeHub(), 2500);
             } else {
                 setHubStatus('fallback');
             }
