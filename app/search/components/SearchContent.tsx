@@ -1,9 +1,10 @@
 "use client";
 
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
-import { Video, Music, Loader2, Download } from "lucide-react";
+import { Video, Music, Loader2, Download, Heart, Plus, ListMusic } from "lucide-react";
 import { useEffect, useState } from "react";
-import { clientSideProbe } from "@/lib/download-helper";
+import { useLibraryStore } from "@/lib/store/useLibraryStore";
+import { cn } from "@/lib/utils";
 
 interface SearchContentProps {
     term?: string;
@@ -20,6 +21,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         setHubProgress,
         hubProgress
     } = usePlayerStore();
+    const { toggleLike, isLiked, playlists, addToPlaylist } = useLibraryStore();
     const [results, setResults] = useState<Track[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -67,14 +69,15 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         };
 
         const downloadOne = async (targetType: 'audio' | 'video') => {
-            setHubProgress((prev) => Math.min(prev + 10, 30));
+            setHubProgress(20);
             const ext = targetType === 'audio' ? 'm4a' : 'mp4';
             const filename = `${track.title.replace(/[^\w\s-]/g, '')}.${ext}`;
 
-            // Phase 1: Try Server-side extraction
+            // Server-side extraction (runs the full pipeline: youtubei.js → ytdl-core → Piped → Invidious)
             try {
+                setHubProgress(40);
                 const res = await fetch(`/api/download?id=${track.id}&type=${targetType}&get_url=true`, {
-                    signal: AbortSignal.timeout(15000),
+                    signal: AbortSignal.timeout(55000),
                 });
 
                 if (res.ok) {
@@ -84,22 +87,11 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                         triggerBrowserDownload(data.url, data.filename || filename);
                         return true;
                     }
+                } else {
+                    console.warn(`Server extraction returned ${res.status}`);
                 }
             } catch (e: any) {
                 console.warn("Server-side extraction failed:", e?.message);
-            }
-
-            // Phase 2: Client-side probe
-            setHubProgress(45);
-            try {
-                const { url } = await clientSideProbe(track.id, targetType);
-                if (url) {
-                    setHubProgress(100);
-                    triggerBrowserDownload(url, filename);
-                    return true;
-                }
-            } catch (e: any) {
-                console.warn("Client-side probe failed:", e?.message);
             }
 
             return false;
@@ -197,6 +189,21 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
 
                         <div className="flex items-center gap-x-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0 pr-2">
                             <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleLike(song);
+                                }}
+                                className={cn(
+                                    "p-3 rounded-full transition-all border",
+                                    isLiked(song.id)
+                                        ? "bg-[#1DB954]/10 border-[#1DB954]/20 text-[#1DB954]"
+                                        : "bg-white/10 border-white/10 text-white/60 hover:text-white"
+                                )}
+                                title={isLiked(song.id) ? "Unlike" : "Like"}
+                            >
+                                <Heart size={18} fill={isLiked(song.id) ? "currentColor" : "none"} strokeWidth={2.5} />
+                            </button>
+                            <button
                                 onClick={() => handlePlay(song, 'audio')}
                                 className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all border border-white/10"
                                 title="Play Audio"
@@ -239,6 +246,37 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                                         <Download size={14} />
                                         Both
                                     </button>
+                                </div>
+                            </div>
+                            <div className="relative group/playlist">
+                                <button
+                                    className="p-3 bg-white/10 hover:bg-white/20 rounded-full text-white/60 hover:text-white transition-all border border-white/10"
+                                    title="Add to Playlist"
+                                >
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </button>
+                                <div className="absolute right-0 bottom-full mb-2 bg-[#181818] border border-white/10 rounded-xl p-1 shadow-2xl min-w-[160px] opacity-0 invisible group-hover/playlist:opacity-100 group-hover/playlist:visible transition-all z-50">
+                                    <div className="px-3 py-2 text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-white/5 mb-1">
+                                        Add to Playlist
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                                        {playlists.length === 0 ? (
+                                            <div className="px-3 py-4 text-center">
+                                                <p className="text-[10px] text-neutral-500">No playlists found</p>
+                                            </div>
+                                        ) : (
+                                            playlists.map((playlist) => (
+                                                <button
+                                                    key={playlist.id}
+                                                    onClick={() => addToPlaylist(playlist.id, song)}
+                                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-white/10 rounded-lg transition text-xs text-white text-left truncate"
+                                                >
+                                                    <ListMusic size={14} className="flex-shrink-0" />
+                                                    <span className="truncate">{playlist.name}</span>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

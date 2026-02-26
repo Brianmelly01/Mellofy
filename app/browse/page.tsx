@@ -58,7 +58,18 @@ export default function BrowsePage() {
     };
 
     const handleItemClick = (item: Playlist) => {
-        router.push(`/search?q=${encodeURIComponent(item.title + " " + item.artist)}`);
+        if (item.type === 'Track' || item.type === 'song') {
+            setTrack({
+                id: item.id,
+                title: item.title,
+                artist: item.artist,
+                thumbnail: item.cover,
+                url: "", // Extracted automatically by Player
+                type: 'song'
+            });
+        } else {
+            router.push(`/search?q=${encodeURIComponent(item.title + " " + item.artist)}`);
+        }
     };
 
     const MediaGrid = ({ items, title, loading }: { items: Playlist[], title: string, loading: boolean }) => (

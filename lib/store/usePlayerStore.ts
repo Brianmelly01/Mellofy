@@ -17,6 +17,9 @@ interface PlayerState {
     progress: number;
     queue: Track[];
     playbackMode: 'audio' | 'video';
+    streamUrl: string | null;
+    isLoadingStream: boolean;
+    playbackError: string | null;
 
     setTrack: (track: Track) => void;
     togglePlay: () => void;
@@ -24,6 +27,9 @@ interface PlayerState {
     setProgress: (progress: number | ((prev: number) => number)) => void;
     setQueue: (tracks: Track[]) => void;
     setPlaybackMode: (mode: 'audio' | 'video') => void;
+    setStreamUrl: (url: string | null) => void;
+    setIsLoadingStream: (isLoading: boolean) => void;
+    setPlaybackError: (error: string | null) => void;
     playNext: () => void;
     playPrevious: () => void;
 
@@ -45,13 +51,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     progress: 0,
     queue: [],
     playbackMode: 'audio',
+    streamUrl: null,
+    isLoadingStream: false,
+    playbackError: null,
 
     isHubOpen: false,
     hubStatus: 'scanning',
     hubProgress: 0,
     hubTrack: null,
 
-    setTrack: (track) => set({ currentTrack: track, isPlaying: true, progress: 0 }),
+    setTrack: (track) => set({
+        currentTrack: track,
+        isPlaying: true,
+        progress: 0,
+        streamUrl: null,
+        isLoadingStream: true,
+        playbackError: null
+    }),
     togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
     setVolume: (volume) => set({ volume }),
     setProgress: (progress) => set((state) => ({
@@ -59,6 +75,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     })),
     setQueue: (tracks) => set({ queue: tracks }),
     setPlaybackMode: (mode) => set({ playbackMode: mode }),
+    setStreamUrl: (streamUrl) => set({ streamUrl, isLoadingStream: false }),
+    setIsLoadingStream: (isLoadingStream) => set({ isLoadingStream }),
+    setPlaybackError: (playbackError) => set({ playbackError, isLoadingStream: false }),
 
     openHub: (track) => set({ isHubOpen: true, hubStatus: 'scanning', hubProgress: 0, hubTrack: track }),
     closeHub: () => set({ isHubOpen: false }),

@@ -23,9 +23,11 @@ import {
     Copy,
     Heart as HeartIcon
 } from "lucide-react";
-import { usePlayerStore } from "@/lib/store/usePlayerStore";
+import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
+import { useLibraryStore } from "@/lib/store/useLibraryStore";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import ReactPlayer from "react-player";
 
 interface AcquisitionResults {
     audio: { url: string; filename: string } | null;
@@ -53,8 +55,19 @@ const Player = () => {
         openHub,
         closeHub,
         setHubStatus,
-        setHubProgress
+        setHubProgress,
+        streamUrl,
+        setStreamUrl,
+        isLoadingStream,
+        setIsLoadingStream,
+        playbackError,
+        setPlaybackError,
+        setProgress: setStoreProgress
     } = usePlayerStore();
+
+    const { toggleLike, isLiked } = useLibraryStore();
+
+    const playerRef = useRef<any>(null);
 
     const [isMuted, setIsMuted] = useState(false);
     const [prevVolume, setPrevVolume] = useState(volume);
@@ -82,6 +95,30 @@ const Player = () => {
         setIsMuted(!isMuted);
     };
 
+    // Auto-extract stream on track change
+    useEffect(() => {
+        if (!storeTrack) return;
+
+        const extractStream = async () => {
+            try {
+                // Check if we already have a stream URL (unlikely but safe)
+                if (streamUrl && !isLoadingStream) return;
+
+                const { url, logs } = await clientSideProbe(storeTrack.id, playbackMode);
+                if (url) {
+                    setStreamUrl(url);
+                } else {
+                    setPlaybackError("Failed to extract media stream. Try downloading instead.");
+                }
+            } catch (err: any) {
+                console.error("Extraction error:", err);
+                setPlaybackError(err.message || "Extraction failed");
+            }
+        };
+
+        extractStream();
+    }, [storeTrack?.id, playbackMode]);
+
     const triggerLink = (url: string, filename: string) => {
         const link = document.createElement("a");
         link.href = url;
@@ -99,13 +136,14 @@ const Player = () => {
         setShowDownloadMenu(false);
 
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
-            setHubProgress((prev) => Math.min(prev + 10, 30));
+            setHubProgress(20);
             const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'm4a' : 'mp4'}`;
 
-            // Phase 1: Try Server-side API (Piping)
+            // Server-side extraction (runs full pipeline: youtubei.js → ytdl-core → Piped → Invidious)
             try {
+                setHubProgress(40);
                 const res = await fetch(`/api/download?id=${track.id}&type=${t}&get_url=true`, {
-                    signal: AbortSignal.timeout(15000),
+                    signal: AbortSignal.timeout(55000),
                 });
 
                 if (res.ok) {
@@ -115,23 +153,11 @@ const Player = () => {
                         triggerLink(data.url, data.filename || filename);
                         return true;
                     }
+                } else {
+                    console.warn(`Server extraction returned ${res.status}`);
                 }
-            } catch (e) {
-                console.warn(`Server extraction failed for ${t}, trying client-side probe...`);
-            }
-
-            // Phase 2: Client-side probe (much more robust)
-            setHubProgress(45);
-            try {
-                const { url, logs } = await clientSideProbe(track.id, t);
-                if (url) {
-                    console.log(`Client-side probe success: ${url}`);
-                    setHubProgress(100);
-                    triggerLink(url, filename);
-                    return true;
-                }
-            } catch (err) {
-                console.error("Client-side probe crash:", err);
+            } catch (e: any) {
+                console.warn(`Server extraction failed for ${t}:`, e?.message);
             }
 
             return false;
@@ -170,8 +196,49 @@ const Player = () => {
                         initial={{ y: 100 }}
                         animate={{ y: 0 }}
                         exit={{ y: 100 }}
-                        className="fixed bottom-0 left-0 right-0 bg-[#121212]/95 backdrop-blur-md border-t border-white/5 py-3 px-4 z-50 shadow-2xl"
+                        className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-xl border-t border-white/5 py-3 px-4 z-50 shadow-2xl"
                     >
+                        {/* Hidden ReactPlayer */}
+                        <div className={cn(
+                            "fixed bottom-24 right-4 w-64 aspect-video rounded-xl overflow-hidden border border-white/10 shadow-2xl z-50 transition-all duration-500",
+                            playbackMode === 'video' ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none"
+                        )}>
+                            {streamUrl && (
+                                <ReactPlayer
+                                    {...({
+                                        ref: playerRef,
+                                        url: streamUrl,
+                                        playing: isPlaying,
+                                        volume: volume,
+                                        muted: isMuted,
+                                        width: "100%",
+                                        height: "100%",
+                                        onProgress: (state: any) => setStoreProgress(state.played),
+                                        onEnded: playNext,
+                                        onError: (e: any) => {
+                                            console.error("ReactPlayer Error:", e);
+                                            setPlaybackError("Playback error occurred.");
+                                        },
+                                        onBuffer: () => setIsLoadingStream(true),
+                                        onBufferEnd: () => setIsLoadingStream(false),
+                                        config: {
+                                            file: {
+                                                attributes: {
+                                                    controlsList: 'nodownload',
+                                                    className: "w-full h-full object-contain"
+                                                }
+                                            }
+                                        }
+                                    } as any)}
+                                />
+                            )}
+                            {isLoadingStream && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                    <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                                </div>
+                            )}
+                        </div>
+
                         <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4">
                             {/* Track Info */}
                             <div className="flex items-center gap-4 w-1/3 min-w-0">
@@ -193,8 +260,14 @@ const Player = () => {
                                         {storeTrack.artist}
                                     </p>
                                 </div>
-                                <button className="ml-2 text-neutral-400 hover:text-[#1DB954] transition">
-                                    <HeartIcon size={18} />
+                                <button
+                                    onClick={() => storeTrack && toggleLike(storeTrack)}
+                                    className={cn(
+                                        "ml-2 transition",
+                                        storeTrack && isLiked(storeTrack.id) ? "text-[#1DB954]" : "text-neutral-400 hover:text-white"
+                                    )}
+                                >
+                                    <HeartIcon size={18} fill={storeTrack && isLiked(storeTrack.id) ? "currentColor" : "none"} />
                                 </button>
                             </div>
 
@@ -218,9 +291,12 @@ const Player = () => {
                                     </button>
                                     <button
                                         onClick={togglePlay}
-                                        className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"
+                                        disabled={isLoadingStream}
+                                        className="w-10 h-10 bg-white rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:scale-100 relative"
                                     >
-                                        {isPlaying ? (
+                                        {isLoadingStream ? (
+                                            <Loader2 size={20} className="text-black animate-spin" strokeWidth={3} />
+                                        ) : isPlaying ? (
                                             <Pause size={20} className="text-black fill-black" strokeWidth={3} />
                                         ) : (
                                             <Play size={20} className="text-black fill-black ml-1" strokeWidth={3} />
@@ -273,15 +349,32 @@ const Player = () => {
                                     </div>
                                 </div>
 
-                                {/* Progress Bar (Minimal) */}
-                                <div className="w-full flex items-center gap-2">
-                                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                                        <motion.div
-                                            className="h-full bg-white group-hover:bg-[#1DB954]"
-                                            initial={false}
-                                            animate={{ width: `${(progress || 0) * 100}%` }}
-                                        />
+                                {playbackError && (
+                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] px-3 py-1 rounded-full whitespace-nowrap animate-bounce flex items-center gap-1">
+                                        <AlertTriangle size={10} />
+                                        {playbackError}
                                     </div>
+                                )}
+                                {/* Progress Bar (Minimal) */}
+                                <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden relative group cursor-pointer">
+                                    <motion.div
+                                        className="h-full bg-white group-hover:bg-[#1DB954]"
+                                        initial={false}
+                                        animate={{ width: `${(progress || 0) * 100}%` }}
+                                    />
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.001"
+                                        value={progress || 0}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value);
+                                            setStoreProgress(val);
+                                            playerRef.current?.seekTo(val);
+                                        }}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
                                 </div>
                             </div>
 
