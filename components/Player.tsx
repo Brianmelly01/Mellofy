@@ -34,6 +34,14 @@ interface AcquisitionResults {
     video: { url: string; filename: string } | null;
 }
 
+const PHASE_LABELS = [
+    "Querying Cobalt network...",
+    "Trying YouTube clients...",
+    "Probing ytdl pipeline...",
+    "Racing Piped relay fleet...",
+    "Racing Invidious relay fleet...",
+];
+
 import { clientSideProbe } from "@/lib/download-helper";
 
 const Player = () => {
@@ -136,15 +144,23 @@ const Player = () => {
         setShowDownloadMenu(false);
 
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
-            setHubProgress(20);
-            const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'm4a' : 'mp4'}`;
+            const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'mp3' : 'mp4'}`;
 
-            // Server-side extraction (runs full pipeline: youtubei.js → ytdl-core → Piped → Invidious)
+            // Animate progress through extraction phases
+            const phaseCount = 5;
+            let phaseIndex = 0;
+            const progressInterval = setInterval(() => {
+                phaseIndex = Math.min(phaseIndex + 1, phaseCount - 1);
+                setHubProgress(Math.min(10 + phaseIndex * 16, 85));
+            }, 8000);
+
             try {
-                setHubProgress(40);
+                setHubProgress(10);
                 const res = await fetch(`/api/download?id=${track.id}&type=${t}&get_url=true`, {
-                    signal: AbortSignal.timeout(55000),
+                    signal: AbortSignal.timeout(58000),
                 });
+
+                clearInterval(progressInterval);
 
                 if (res.ok) {
                     const data = await res.json();
@@ -157,6 +173,7 @@ const Player = () => {
                     console.warn(`Server extraction returned ${res.status}`);
                 }
             } catch (e: any) {
+                clearInterval(progressInterval);
                 console.warn(`Server extraction failed for ${t}:`, e?.message);
             }
 
@@ -166,9 +183,12 @@ const Player = () => {
         try {
             let success = false;
             if (type === 'both') {
+                setHubProgress(5);
                 const s1 = await attemptDownloadOne('audio');
-                setHubProgress(50);
-                await new Promise(r => setTimeout(r, 800));
+                if (s1) {
+                    setHubProgress(50);
+                    await new Promise(r => setTimeout(r, 600));
+                }
                 const s2 = await attemptDownloadOne('video');
                 success = s1 || s2;
             } else {
@@ -463,9 +483,25 @@ const Player = () => {
 
                                     {hubStatus === ('fallback' as any) && hubTrack && (
                                         <div className="space-y-2">
+                                            {/* Retry buttons */}
                                             <div className="grid grid-cols-2 gap-2">
                                                 <button
-                                                    onClick={() => window.open(`https://cobalt.tools/#https://www.youtube.com/watch?v=${hubTrack.id}`, '_blank')}
+                                                    onClick={() => handleDownload('audio')}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-[#1DB954]/10 hover:bg-[#1DB954]/20 rounded-xl border border-[#1DB954]/30 transition text-[10px] font-bold text-[#1DB954]"
+                                                >
+                                                    <Music size={14} /> Retry Audio
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDownload('video')}
+                                                    className="flex items-center justify-center gap-2 p-3 bg-blue-500/10 hover:bg-blue-500/20 rounded-xl border border-blue-500/30 transition text-[10px] font-bold text-blue-400"
+                                                >
+                                                    <Video size={14} /> Retry Video
+                                                </button>
+                                            </div>
+                                            {/* External bridges */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    onClick={() => window.open(`https://cobalt.tools/#${encodeURIComponent('https://www.youtube.com/watch?v=' + hubTrack.id)}`, '_blank')}
                                                     className="flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
                                                 >
                                                     <ExternalLink size={14} className="text-blue-400" /> Cobalt Web
@@ -480,7 +516,7 @@ const Player = () => {
                                             <button
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${hubTrack.id}`);
-                                                    alert("YouTube URL copied to clipboard!");
+                                                    alert("YouTube URL copied!");
                                                 }}
                                                 className="w-full flex items-center justify-center gap-2 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition text-[10px] font-bold"
                                             >

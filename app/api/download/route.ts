@@ -5,22 +5,27 @@ import ytdl from "@distube/ytdl-core";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// ── Piped instances — verified Feb 2026 ──
+// ── Cobalt API instances (public, works on datacenter IPs) ──
+const COBALT_API_INSTANCES = [
+    "https://api.cobalt.tools",
+    "https://cobalt.api.horse",
+];
+
+// ── Piped instances — verified March 2026 ──
 const PIPED_INSTANCES = [
     "https://pipedapi.kavin.rocks",
     "https://pipedapi.adminforge.de",
     "https://api.piped.yt",
-    "https://piped-api.lunar.icu",
     "https://pipedapi.leptons.xyz",
-    "https://pipedapi.mha.fi",
     "https://pipedapi.garudalinux.org",
     "https://pipedapi.rivo.lol",
     "https://pipedapi.r4fo.com",
+    "https://piped-api.codespace.cz",
+    "https://pipedapi.drgns.space",
     "https://pipedapi.in.projectsegfau.lt",
-    "https://pipedapi.tokhmi.xyz",
 ];
 
-// ── Invidious instances — verified Feb 2026 ──
+// ── Invidious instances — verified March 2026 ──
 const INVIDIOUS_INSTANCES = [
     "https://inv.nadeko.net",
     "https://invidious.nerdvpn.de",
@@ -28,20 +33,95 @@ const INVIDIOUS_INSTANCES = [
     "https://invidious.privacydev.net",
     "https://iv.melmac.space",
     "https://inv.tux.pizza",
-    "https://invidious.no-logs.com",
-    "https://id.420129.xyz",
-    "https://invidious.drgns.space",
     "https://invidious.jing.rocks",
     "https://iv.ggtyler.dev",
+    "https://invidious.drgns.space",
+    "https://invidious.lunar.icu",
 ];
 
-// ── youtubei.js extraction — ANDROID client bypasses poToken ──
+// ── Phase 1: Cobalt API — works on Vercel datacenter IPs ──
+async function extractViaCobalt(
+    videoId: string,
+    type: string,
+): Promise<{ url: string; title: string } | null> {
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    for (const instance of COBALT_API_INSTANCES) {
+        try {
+            console.log(`Cobalt(${instance}): Trying ${videoId} (${type})...`);
+
+            // Build request body for Cobalt API v10
+            const body: Record<string, any> = {
+                url: youtubeUrl,
+                downloadMode: type === "audio" ? "audio" : "auto",
+                audioFormat: "mp3",
+                videoQuality: "720",
+                filenameStyle: "basic",
+            };
+
+            if (type === "audio") {
+                body.downloadMode = "audio";
+                body.audioFormat = "mp3";
+            } else {
+                body.downloadMode = "auto";
+            }
+
+            const res = await fetch(`${instance}/`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                },
+                body: JSON.stringify(body),
+                signal: AbortSignal.timeout(20000),
+            });
+
+            if (!res.ok) {
+                const text = await res.text().catch(() => "N/A");
+                console.warn(`Cobalt(${instance}): HTTP ${res.status}: ${text.substring(0, 100)}`);
+                continue;
+            }
+
+            const data = await res.json();
+            console.log(`Cobalt(${instance}): Response status=${data.status}`);
+
+            // Cobalt API returns { status: "tunnel"|"redirect"|"stream", url: "...", filename: "..." }
+            if ((data.status === "tunnel" || data.status === "redirect" || data.status === "stream") && data.url) {
+                console.log(`Cobalt(${instance}): SUCCESS — got ${type} URL`);
+                // Extract title from filename if available
+                const title = data.filename
+                    ? data.filename.replace(/\.(mp3|mp4|webm|m4a|opus)$/i, "")
+                    : "download";
+                return { url: data.url, title };
+            }
+
+            // Cobalt v9 format: array of streams
+            if (data.status === "picker" && data.picker?.length > 0) {
+                const stream = data.picker[0];
+                if (stream?.url) {
+                    const title = data.filename
+                        ? data.filename.replace(/\.(mp3|mp4|webm|m4a|opus)$/i, "")
+                        : "download";
+                    return { url: stream.url, title };
+                }
+            }
+
+            console.warn(`Cobalt(${instance}): Unexpected response: ${JSON.stringify(data).substring(0, 150)}`);
+        } catch (e: any) {
+            console.warn(`Cobalt(${instance}): Error — ${e?.message}`);
+        }
+    }
+    return null;
+}
+
+// ── Phase 2: youtubei.js — multiple clients ──
 async function extractViaYouTubeJS(
     videoId: string,
     type: string,
 ): Promise<{ url: string; title: string } | null> {
-    // These clients work without poToken on datacenter IPs
-    const clients = ["ANDROID", "TV_EMBEDDED", "IOS"] as const;
+    // Try clients in priority order: MWEB tends to return non-IP-signed URLs on some regions
+    const clients = ["MWEB", "WEB_CREATOR", "ANDROID", "TV_EMBEDDED", "IOS"] as const;
     let lastError: any = null;
 
     for (const clientName of clients) {
@@ -78,10 +158,13 @@ async function extractViaYouTubeJS(
                     withUrl.find((f: any) => f.mime_type?.includes("audio/webm")) ||
                     withUrl.find((f: any) => f.mime_type?.includes("audio"));
             } else {
+                // Prefer combined streams (has audio+video) for immediate playback
                 chosen =
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio && f.quality_label === "720p") ||
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio && f.quality_label === "480p") ||
+                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio) ||
                     withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "720p") ||
                     withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.quality_label === "480p") ||
-                    withUrl.find((f: any) => f.mime_type?.includes("video/mp4") && f.has_audio) ||
                     withUrl.find((f: any) => f.mime_type?.includes("video/mp4")) ||
                     withUrl.find((f: any) => f.mime_type?.includes("video"));
             }
@@ -100,7 +183,7 @@ async function extractViaYouTubeJS(
     throw new Error(`YouTubeJS: All clients failed. Last: ${lastError?.message || "No data"}`);
 }
 
-// ── @distube/ytdl-core extraction ──
+// ── Phase 3: @distube/ytdl-core extraction ──
 async function extractViaYtdl(
     videoId: string,
     type: string,
@@ -146,7 +229,7 @@ async function extractViaYtdl(
     throw new Error(`ytdl-core: No suitable ${type} format found`);
 }
 
-// ── Piped API ──
+// ── Phase 4: Piped API ──
 async function tryPiped(
     instance: string,
     videoId: string,
@@ -191,7 +274,7 @@ async function tryPiped(
     throw new Error(`${instance}: Found streams but no URL`);
 }
 
-// ── Invidious API ──
+// ── Phase 5: Invidious API ──
 async function tryInvidious(
     instance: string,
     videoId: string,
@@ -219,8 +302,8 @@ async function tryInvidious(
 
     if (type === "audio") {
         format =
-            formats.find((f: any) => f.type?.includes("audio/webm")) ||
             formats.find((f: any) => f.type?.includes("audio/mp4")) ||
+            formats.find((f: any) => f.type?.includes("audio/webm")) ||
             formats.find((f: any) => f.type?.includes("audio"));
     } else {
         format =
@@ -269,28 +352,38 @@ async function extractStream(
 ): Promise<{ url: string; title: string } | null> {
     const phaseErrors: string[] = [];
 
-    // Phase 1: youtubei.js (ANDROID client — no poToken needed)
-    console.log("Phase 1: youtubei.js (ANDROID)...");
+    // Phase 1: Cobalt API (most reliable on Vercel datacenter IPs)
+    console.log("Phase 1: Cobalt API...");
     try {
-        const result = await extractViaYouTubeJS(videoId, type);
+        const result = await extractViaCobalt(videoId, type);
         if (result) return result;
-        phaseErrors.push("P1:YouTubeJS returned null");
+        phaseErrors.push("P1:Cobalt returned null");
     } catch (e: any) {
         phaseErrors.push(`P1:${e?.message || e}`);
     }
 
-    // Phase 2: @distube/ytdl-core
-    console.log("Phase 2: @distube/ytdl-core...");
+    // Phase 2: youtubei.js (MWEB, WEB_CREATOR, ANDROID, etc.)
+    console.log("Phase 2: youtubei.js (multiple clients)...");
     try {
-        const result = await extractViaYtdl(videoId, type);
+        const result = await extractViaYouTubeJS(videoId, type);
         if (result) return result;
-        phaseErrors.push("P2:ytdl-core returned null");
+        phaseErrors.push("P2:YouTubeJS returned null");
     } catch (e: any) {
         phaseErrors.push(`P2:${e?.message || e}`);
     }
 
-    // Phase 3: Piped fleet (parallel)
-    console.log("Phase 3: Piped fleet (parallel)...");
+    // Phase 3: @distube/ytdl-core
+    console.log("Phase 3: @distube/ytdl-core...");
+    try {
+        const result = await extractViaYtdl(videoId, type);
+        if (result) return result;
+        phaseErrors.push("P3:ytdl-core returned null");
+    } catch (e: any) {
+        phaseErrors.push(`P3:${e?.message || e}`);
+    }
+
+    // Phase 4: Piped fleet (parallel)
+    console.log("Phase 4: Piped fleet (parallel)...");
     const shuffledPiped = [...PIPED_INSTANCES].sort(() => Math.random() - 0.5);
     const pipedResult = await raceInstances(
         shuffledPiped.slice(0, 6),
@@ -298,10 +391,10 @@ async function extractStream(
         "Piped",
     );
     if (pipedResult) return pipedResult;
-    phaseErrors.push("P3:All Piped instances failed");
+    phaseErrors.push("P4:All Piped instances failed");
 
-    // Phase 4: Invidious fleet (parallel)
-    console.log("Phase 4: Invidious fleet (parallel)...");
+    // Phase 5: Invidious fleet (parallel)
+    console.log("Phase 5: Invidious fleet (parallel)...");
     const shuffledInv = [...INVIDIOUS_INSTANCES].sort(() => Math.random() - 0.5);
     const invResult = await raceInstances(
         shuffledInv.slice(0, 6),
@@ -309,7 +402,7 @@ async function extractStream(
         "Invidious",
     );
     if (invResult) return invResult;
-    phaseErrors.push("P4:All Invidious instances failed");
+    phaseErrors.push("P5:All Invidious instances failed");
 
     throw new Error(`All extraction methods failed | ${phaseErrors.join(" | ")}`);
 }
@@ -365,6 +458,7 @@ export async function GET(request: NextRequest) {
             if (directUrl) {
                 console.log("Phase 0: Direct URL proxy...");
                 const isGoogle = directUrl.includes("googlevideo.com");
+                const isCobalt = directUrl.includes("cobalt");
                 const headers: Record<string, string> = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                     Accept: "*/*",
@@ -383,8 +477,9 @@ export async function GET(request: NextRequest) {
 
                 if (streamResponse.ok) {
                     const h = new Headers();
-                    h.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
-                    h.set("Content-Disposition", `attachment; filename="download.${type === "audio" ? "m4a" : "mp4"}"`);
+                    h.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mpeg" : "video/mp4"));
+                    const ext = type === "audio" ? "mp3" : "mp4";
+                    h.set("Content-Disposition", `attachment; filename="download.${ext}"`);
                     if (streamResponse.headers.get("Content-Length"))
                         h.set("Content-Length", streamResponse.headers.get("Content-Length")!);
                     h.set("Accept-Ranges", "bytes");
@@ -399,10 +494,11 @@ export async function GET(request: NextRequest) {
 
             // Return URL only (get_url mode)
             if (getUrl && result?.url) {
+                const ext = type === "audio" ? "mp3" : "mp4";
                 return NextResponse.json({
                     url: result.url,
                     title: result.title || "download",
-                    filename: `${(result.title || "download").replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}`,
+                    filename: `${(result.title || "download").replace(/[^\w\s-]/g, "")}.${ext}`,
                 });
             }
 
@@ -410,23 +506,28 @@ export async function GET(request: NextRequest) {
 
             // Stream the result
             console.log("Streaming result...");
+            const streamHeaders: Record<string, string> = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                Range: "bytes=0-",
+                Connection: "keep-alive",
+            };
+            if (result.url.includes("googlevideo.com")) {
+                streamHeaders["Origin"] = "https://www.youtube.com";
+                streamHeaders["Referer"] = "https://www.youtube.com/";
+            }
+
             const streamResponse = await fetch(result.url, {
-                headers: {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                    Range: "bytes=0-",
-                    Connection: "keep-alive",
-                    Origin: "https://www.youtube.com",
-                    Referer: "https://www.youtube.com/",
-                },
+                headers: streamHeaders,
                 signal: AbortSignal.timeout(30000),
             });
 
             if (!streamResponse.ok)
                 throw new Error(`Stream failed: ${streamResponse.status}`);
 
+            const ext = type === "audio" ? "mp3" : "mp4";
             const h = new Headers();
-            h.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mp4" : "video/mp4"));
-            h.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${type === "audio" ? "m4a" : "mp4"}"`);
+            h.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mpeg" : "video/mp4"));
+            h.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${ext}"`);
             if (streamResponse.headers.get("Content-Length"))
                 h.set("Content-Length", streamResponse.headers.get("Content-Length")!);
             h.set("Accept-Ranges", "bytes");
@@ -451,7 +552,7 @@ export async function GET(request: NextRequest) {
         }
     };
 
-    const fallbackUrl = `https://cobalt.tools/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+    const fallbackUrl = `https://cobalt.tools/#${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
 
     if (type === "both") {
         const [audio, video] = await Promise.all([
@@ -460,7 +561,7 @@ export async function GET(request: NextRequest) {
         ]);
 
         return NextResponse.json({
-            audio: audio ? { url: audio.url, filename: `${audio.title}.m4a` } : null,
+            audio: audio ? { url: audio.url, filename: `${audio.title}.mp3` } : null,
             video: video ? { url: video.url, filename: `${video.title}.mp4` } : null,
             fallbackUrl,
             status: audio || video ? "ready" : "fallback_required",
@@ -470,7 +571,7 @@ export async function GET(request: NextRequest) {
     const result = await probeType(type);
     if (result) {
         return NextResponse.json({
-            audio: type === "audio" ? { url: result.url, filename: `${result.title}.m4a` } : null,
+            audio: type === "audio" ? { url: result.url, filename: `${result.title}.mp3` } : null,
             video: type === "video" ? { url: result.url, filename: `${result.title}.mp4` } : null,
             fallbackUrl,
             status: "ready",
