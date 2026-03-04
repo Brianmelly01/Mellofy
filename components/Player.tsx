@@ -42,7 +42,7 @@ const PHASE_LABELS = [
     "Racing Invidious relay fleet...",
 ];
 
-import { clientSideProbe } from "@/lib/download-helper";
+import { clientSideProbe, cobaltBrowserExtract } from "@/lib/download-helper";
 
 const Player = () => {
     const {
@@ -146,35 +146,39 @@ const Player = () => {
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
             const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'mp3' : 'mp4'}`;
 
-            // Animate progress through extraction phases
-            const phaseCount = 5;
-            let phaseIndex = 0;
-            const progressInterval = setInterval(() => {
-                phaseIndex = Math.min(phaseIndex + 1, phaseCount - 1);
-                setHubProgress(Math.min(10 + phaseIndex * 16, 85));
-            }, 8000);
-
+            // ── Phase A: Server-side extraction pipeline ──
             try {
-                setHubProgress(10);
+                setHubProgress(15);
                 const res = await fetch(`/api/download?id=${track.id}&type=${t}&get_url=true`, {
-                    signal: AbortSignal.timeout(58000),
+                    signal: AbortSignal.timeout(40000),
                 });
-
-                clearInterval(progressInterval);
 
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) {
-                        setHubProgress(100);
+                        setHubProgress(90);
                         triggerLink(data.url, data.filename || filename);
                         return true;
                     }
                 } else {
-                    console.warn(`Server extraction returned ${res.status}`);
+                    console.warn(`[Hub] Server extraction returned ${res.status}`);
                 }
             } catch (e: any) {
-                clearInterval(progressInterval);
-                console.warn(`Server extraction failed for ${t}:`, e?.message);
+                console.warn(`[Hub] Server extraction failed for ${t}:`, e?.message);
+            }
+
+            // ── Phase B: Cobalt API directly from browser ──
+            // Browser IPs are not blocked by Cobalt — only datacenter IPs are.
+            try {
+                setHubProgress(55);
+                const cobalt = await cobaltBrowserExtract(track.id, t);
+                if (cobalt?.url) {
+                    setHubProgress(90);
+                    triggerLink(cobalt.url, cobalt.filename || filename);
+                    return true;
+                }
+            } catch (e: any) {
+                console.warn(`[Hub] Cobalt browser extract failed for ${t}:`, e?.message);
             }
 
             return false;
