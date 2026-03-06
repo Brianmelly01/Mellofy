@@ -1,17 +1,16 @@
 import play from "play-dl";
-
-async function testPlayDL() {
+async function test() {
     try {
-        console.log("Fetching video info using play-dl...");
-        // This attempts to get the streaming URL for the video
-        const info = await play.video_info("dQw4w9WgXcQ");
-        console.log("Title:", info.video_details.title);
+        console.log("Fetching play-dl info...");
+        const video = await play.video_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        console.log("Got info. Finding best audio...");
+        const audioStream = await play.stream_from_info(video, { quality: 2, discordPlayerCompatibility: false }); // 2 is highest audio
+        console.log("Audio URL:", audioStream.url.slice(0, 100));
 
-        const streamInfo = await play.stream_from_info(info);
-        console.log("Stream URL:", streamInfo.url?.slice(0, 80));
+        const res = await fetch(audioStream.url, { method: "HEAD" });
+        console.log("HTTP status:", res.status);
     } catch (e) {
-        console.error("play-dl Error:", e.message);
+        console.error("play-dl error:", e);
     }
 }
-
-testPlayDL();
+test();
