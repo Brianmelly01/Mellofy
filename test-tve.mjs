@@ -6,11 +6,11 @@ async function test() {
             retrieve_player: false,
             generate_session_locally: true,
             cache: new UniversalCache(false),
-            client_type: "IOS"
+            client_type: "TV_EMBEDDED"
         });
 
-        console.log("Fetching basic info for IOS...");
-        const info = await yt.getBasicInfo("dQw4w9WgXcQ", "IOS");
+        console.log("Fetching basic info for TV_EMBEDDED...");
+        const info = await yt.getBasicInfo("dQw4w9WgXcQ", "TV_EMBEDDED");
 
         const allFormats = [
             ...(info.streaming_data?.adaptive_formats || []),
@@ -23,10 +23,10 @@ async function test() {
 
         if (withUrl.length > 0) {
             const format = withUrl.find(f => f.mime_type.includes('audio')) || withUrl[0];
-            console.log("Success! Audio URL:", format.url.slice(0, 100));
+            console.log("Success! Audio URL:", format.url.slice(0, 50));
 
             const res = await fetch(format.url, { method: "HEAD" });
-            console.log("HTTP status via IOS:", res.status);
+            console.log("HTTP status via TV_EMBEDDED:", res.status);
         }
     } catch (e) { console.error("Error:", e.stack); }
 }
