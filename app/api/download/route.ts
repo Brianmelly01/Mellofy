@@ -26,57 +26,17 @@ const INVIDIOUS_INSTANCES = [
 // ── Cobalt API instances ──
 const COBALT_API_INSTANCES = [
     "https://api.cobalt.tools",
+    "https://api.cobalt.blackcat.sweeux.org",
+    "https://co.wuk.sh",
     "https://cobalt.api.horse",
 ];
 
-// ── Phase 1: @distube/ytdl-core (pure JS, works on Vercel) ──
-async function extractViaYtdlCore(
-    videoId: string,
-    type: string,
-): Promise<{ url: string; title: string } | null> {
-    console.log(`ytdl-core: Trying ${videoId} (${type})...`);
-    try {
-        const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-        const title = info.videoDetails.title || "download";
-
-        if (type === "audio") {
-            const formats = ytdl.filterFormats(info.formats, "audioonly");
-            formats.sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0));
-            if (formats[0]?.url) {
-                console.log(`ytdl-core: SUCCESS audio (bitrate: ${formats[0].audioBitrate})`);
-                return { url: formats[0].url, title };
-            }
-        } else {
-            // Try combined audio+video first
-            const combined = ytdl.filterFormats(info.formats, "videoandaudio");
-            combined.sort((a, b) => (b.height || 0) - (a.height || 0));
-            if (combined[0]?.url) {
-                console.log(`ytdl-core: SUCCESS video combined (${combined[0].height}p)`);
-                return { url: combined[0].url, title };
-            }
-
-            // Fall back to video-only
-            const videoOnly = ytdl.filterFormats(info.formats, "videoonly");
-            videoOnly.sort((a, b) => (b.height || 0) - (a.height || 0));
-            if (videoOnly[0]?.url) {
-                console.log(`ytdl-core: SUCCESS video-only (${videoOnly[0].height}p)`);
-                return { url: videoOnly[0].url, title };
-            }
-        }
-
-        console.warn(`ytdl-core: No ${type} URL found in formats`);
-        return null;
-    } catch (e: any) {
-        console.error("ytdl-core ERROR:", e?.message?.slice(0, 150));
-        throw new Error(`ytdl-core: ${e?.message || e}`);
-    }
-}
-
-// ── Phase 2: Cobalt API ──
+// ── Phase 1 & 2: Cobalt API (Primary Method) ──
 async function extractViaCobalt(
     videoId: string,
     type: string,
 ): Promise<{ url: string; title: string } | null> {
+    console.log(`Cobalt: Trying ${videoId} (${type})...`);
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     for (const instance of COBALT_API_INSTANCES) {
         try {
@@ -96,15 +56,18 @@ async function extractViaCobalt(
             const data = await res.json();
             if ((data.status === "tunnel" || data.status === "redirect" || data.status === "stream") && data.url) {
                 const title = data.filename?.replace(/\.(mp3|mp4|webm|m4a|opus)$/i, "") || "download";
+                console.log(`Cobalt SUCCESS on ${instance}`);
                 return { url: data.url, title };
             }
             if (data.status === "picker" && data.picker?.[0]?.url) {
+                console.log(`Cobalt SUCCESS (picker) on ${instance}`);
                 return { url: data.picker[0].url, title: data.filename || "download" };
             }
         } catch { }
     }
     return null;
 }
+
 
 // ── Phase 3: Piped API ──
 async function tryPiped(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
@@ -152,22 +115,13 @@ async function raceInstances<T>(
 async function extractStream(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const errors: string[] = [];
 
-    // Phase 1: ytdl-core (pure JS, best for Vercel)
-    try {
-        const result = await extractViaYtdlCore(videoId, type);
-        if (result) return result;
-        errors.push("P1:no URL in formats");
-    } catch (e: any) {
-        errors.push(`P1:${e?.message}`);
-    }
-
-    // Phase 2: Cobalt
+    // Phase 1 & 2: Cobalt
     try {
         const result = await extractViaCobalt(videoId, type);
         if (result) return result;
-        errors.push("P2:Cobalt null");
+        errors.push("P1:Cobalt null");
     } catch (e: any) {
-        errors.push(`P2:${e?.message}`);
+        errors.push(`P1:${e?.message}`);
     }
 
     // Phase 3: Piped (parallel)
@@ -258,21 +212,28 @@ export async function GET(request: NextRequest) {
 
             if (!result?.url) throw new Error("All extraction methods exhausted");
 
-            // Pipe stream through server
-            const streamHeaders: Record<string, string> = { "User-Agent": "Mozilla/5.0", Range: "bytes=0-" };
+            // If it's your Cobalt tunnel or a direct URL, just fetch and return the response transparently
+            const streamHeaders: Record<string, string> = { "User-Agent": "Mozilla/5.0" };
             if (result.url.includes("googlevideo.com")) {
                 streamHeaders["Origin"] = "https://www.youtube.com";
                 streamHeaders["Referer"] = "https://www.youtube.com/";
             }
+
             const streamResponse = await fetch(result.url, { headers: streamHeaders, signal: AbortSignal.timeout(30000) });
             if (!streamResponse.ok) throw new Error(`Stream fetch: ${streamResponse.status}`);
 
+            // To prevent hanging on piped Vercel streams, use the native headers from the Cobalt response
+            const h = new Headers(streamResponse.headers);
             const ext = type === "audio" ? "mp3" : "mp4";
-            const h = new Headers();
-            h.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mpeg" : "video/mp4"));
-            h.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${ext}"`);
-            if (streamResponse.headers.get("Content-Length")) h.set("Content-Length", streamResponse.headers.get("Content-Length")!);
-            h.set("Accept-Ranges", "bytes");
+
+            // Only set specific headers if they are missing
+            if (!h.has("Content-Type")) {
+                h.set("Content-Type", type === "audio" ? "audio/mpeg" : "video/mp4");
+            }
+            if (!h.has("Content-Disposition")) {
+                h.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${ext}"`);
+            }
+
             return new NextResponse(streamResponse.body, { headers: h });
 
         } catch (e: any) {
