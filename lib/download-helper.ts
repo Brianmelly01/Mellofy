@@ -24,16 +24,12 @@ export const cobaltBrowserExtract = async (
 
             const body: Record<string, any> = {
                 url: youtubeUrl,
+                downloadMode: type === "audio" ? "audio" : "auto",
                 filenameStyle: "basic",
             };
 
             if (type === "audio") {
-                body.downloadMode = "audio";
                 body.audioFormat = "mp3";
-                body.audioQuality = "320";
-            } else {
-                body.downloadMode = "auto";
-                body.videoQuality = "720";
             }
 
             const res = await fetch(`${instance}/`, {

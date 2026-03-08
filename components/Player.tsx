@@ -118,12 +118,14 @@ const Player = () => {
 
         const extractStream = async () => {
             try {
-                const { url } = await clientSideProbe(storeTrack.id, playbackMode);
+                const { url: rawUrl } = await clientSideProbe(storeTrack.id, playbackMode);
 
                 // Ignore result if track changed while we were fetching
                 if (currentExtractId.current !== extractId) return;
 
-                if (url) {
+                if (rawUrl) {
+                    // Pass the stream URL through our local proxy to avoid CORS/header issues in ReactPlayer
+                    const url = `/api/download?action=proxy&url=${encodeURIComponent(rawUrl)}`;
                     setStreamUrl(url);
                 } else {
                     setIsLoadingStream(false);
@@ -317,8 +319,9 @@ const Player = () => {
                                             "p-2 transition",
                                             playbackMode === 'video' ? "text-[#1DB954]" : "text-neutral-400 hover:text-white"
                                         )}
+                                        title={playbackMode === 'audio' ? "Switch to Video Mode" : "Switch to Audio Mode"}
                                     >
-                                        <Shuffle size={18} />
+                                        {playbackMode === 'video' ? <Video size={18} /> : <Music size={18} />}
                                     </button>
                                     <button
                                         onClick={playPrevious}
