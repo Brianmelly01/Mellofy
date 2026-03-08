@@ -76,6 +76,7 @@ const Player = () => {
     const { toggleLike, isLiked } = useLibraryStore();
 
     const playerRef = useRef<any>(null);
+    const currentExtractId = useRef<string | null>(null);
 
     const [isMuted, setIsMuted] = useState(false);
     const [prevVolume, setPrevVolume] = useState(volume);
@@ -107,19 +108,31 @@ const Player = () => {
     useEffect(() => {
         if (!storeTrack) return;
 
+        const extractId = `${storeTrack.id}-${playbackMode}`;
+        currentExtractId.current = extractId;
+
+        // Reset state for new track
+        setStreamUrl(null);
+        setPlaybackError(null);
+        setIsLoadingStream(true);
+
         const extractStream = async () => {
             try {
-                // Check if we already have a stream URL (unlikely but safe)
-                if (streamUrl && !isLoadingStream) return;
+                const { url } = await clientSideProbe(storeTrack.id, playbackMode);
 
-                const { url, logs } = await clientSideProbe(storeTrack.id, playbackMode);
+                // Ignore result if track changed while we were fetching
+                if (currentExtractId.current !== extractId) return;
+
                 if (url) {
                     setStreamUrl(url);
                 } else {
+                    setIsLoadingStream(false);
                     setPlaybackError("Failed to extract media stream. Try downloading instead.");
                 }
             } catch (err: any) {
+                if (currentExtractId.current !== extractId) return;
                 console.error("Extraction error:", err);
+                setIsLoadingStream(false);
                 setPlaybackError(err.message || "Extraction failed");
             }
         };

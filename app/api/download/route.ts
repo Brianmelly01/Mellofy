@@ -1,26 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { create } from "youtube-dl-exec";
-import path from "path";
-
-const getBinaryPath = () => {
-    return path.join(
-        process.cwd(),
-        "node_modules",
-        "youtube-dl-exec",
-        "bin",
-        process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"
-    );
-};
-const youtubedl = create(getBinaryPath());
+import ytdl from "@distube/ytdl-core";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-// ── Cobalt API instances (public, works on datacenter IPs) ──
-const COBALT_API_INSTANCES = [
-    "https://api.cobalt.tools",
-    "https://cobalt.api.horse",
-];
 
 // ── Piped instances ──
 const PIPED_INSTANCES = [
@@ -29,6 +11,7 @@ const PIPED_INSTANCES = [
     "https://api.piped.yt",
     "https://pipedapi.leptons.xyz",
     "https://pipedapi.garudalinux.org",
+    "https://watchapi.whatever.social",
 ];
 
 // ── Invidious instances ──
@@ -36,61 +19,57 @@ const INVIDIOUS_INSTANCES = [
     "https://inv.nadeko.net",
     "https://yewtu.be",
     "https://iv.melmac.space",
+    "https://invidious.io.lol",
+    "https://invidious.privacydev.net",
 ];
 
-// ── Phase 1: yt-dlp (youtube-dl-exec) ──
-async function extractViaYtDlp(
+// ── Cobalt API instances ──
+const COBALT_API_INSTANCES = [
+    "https://api.cobalt.tools",
+    "https://cobalt.api.horse",
+];
+
+// ── Phase 1: @distube/ytdl-core (pure JS, works on Vercel) ──
+async function extractViaYtdlCore(
     videoId: string,
     type: string,
 ): Promise<{ url: string; title: string } | null> {
-    console.log(`yt-dlp: Trying ${videoId} (${type})...`);
+    console.log(`ytdl-core: Trying ${videoId} (${type})...`);
     try {
-        const output = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
-            dumpSingleJson: true,
-            noCheckCertificates: true,
-            noWarnings: true,
-            preferFreeFormats: true,
-            addHeader: [
-                'referer:youtube.com',
-                'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-            ]
-        });
-
-        const title = output.title || "download";
+        const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+        const title = info.videoDetails.title || "download";
 
         if (type === "audio") {
-            const audioFormats = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec === 'none');
-            // Sort by average bitrate descending
-            audioFormats.sort((a: any, b: any) => (b.abr || 0) - (a.abr || 0));
-            if (audioFormats.length > 0 && audioFormats[0].url) {
-                console.log(`yt-dlp: SUCCESS audio`);
-                return { url: audioFormats[0].url, title };
+            const formats = ytdl.filterFormats(info.formats, "audioonly");
+            formats.sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0));
+            if (formats[0]?.url) {
+                console.log(`ytdl-core: SUCCESS audio (bitrate: ${formats[0].audioBitrate})`);
+                return { url: formats[0].url, title };
             }
         } else {
-            // Video: try to find combined audio+video first
-            const combinedFormats = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec !== 'none');
-            // Sort by resolution
-            combinedFormats.sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
-
-            if (combinedFormats.length > 0 && combinedFormats[0].url) {
-                console.log(`yt-dlp: SUCCESS video (combined)`);
-                return { url: combinedFormats[0].url, title };
+            // Try combined audio+video first
+            const combined = ytdl.filterFormats(info.formats, "videoandaudio");
+            combined.sort((a, b) => (b.height || 0) - (a.height || 0));
+            if (combined[0]?.url) {
+                console.log(`ytdl-core: SUCCESS video combined (${combined[0].height}p)`);
+                return { url: combined[0].url, title };
             }
 
-            // Fallback to video-only if combined not found
-            const videoFormats = output.formats.filter((f: any) => f.vcodec !== 'none');
-            videoFormats.sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
-            if (videoFormats.length > 0 && videoFormats[0].url) {
-                console.log(`yt-dlp: SUCCESS video (video-only)`);
-                return { url: videoFormats[0].url, title };
+            // Fall back to video-only
+            const videoOnly = ytdl.filterFormats(info.formats, "videoonly");
+            videoOnly.sort((a, b) => (b.height || 0) - (a.height || 0));
+            if (videoOnly[0]?.url) {
+                console.log(`ytdl-core: SUCCESS video-only (${videoOnly[0].height}p)`);
+                return { url: videoOnly[0].url, title };
             }
         }
-    } catch (e: any) {
-        console.error("yt-dlp FATAL ERROR:", e);
-        throw new Error(`yt-dlp failed: ${e?.message || JSON.stringify(e)}`);
-    }
 
-    throw new Error(`yt-dlp: No suitable ${type} format found`);
+        console.warn(`ytdl-core: No ${type} URL found in formats`);
+        return null;
+    } catch (e: any) {
+        console.error("ytdl-core ERROR:", e?.message?.slice(0, 150));
+        throw new Error(`ytdl-core: ${e?.message || e}`);
+    }
 }
 
 // ── Phase 2: Cobalt API ──
@@ -101,143 +80,113 @@ async function extractViaCobalt(
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     for (const instance of COBALT_API_INSTANCES) {
         try {
-            console.log(`Cobalt(${instance}): Trying ${videoId} (${type})...`);
             const body: Record<string, any> = {
                 url: youtubeUrl,
                 downloadMode: type === "audio" ? "audio" : "auto",
                 audioFormat: "mp3",
                 filenameStyle: "basic",
             };
-
             const res = await fetch(`${instance}/`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "User-Agent": "Mozilla/5.0",
-                },
+                headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Mozilla/5.0" },
                 body: JSON.stringify(body),
                 signal: AbortSignal.timeout(10000),
             });
-
             if (!res.ok) continue;
-
             const data = await res.json();
             if ((data.status === "tunnel" || data.status === "redirect" || data.status === "stream") && data.url) {
-                const title = data.filename ? data.filename.replace(/\.(mp3|mp4|webm|m4a|opus)$/i, "") : "download";
+                const title = data.filename?.replace(/\.(mp3|mp4|webm|m4a|opus)$/i, "") || "download";
                 return { url: data.url, title };
             }
-            if (data.status === "picker" && data.picker?.length > 0 && data.picker[0]?.url) {
-                const title = data.filename ? data.filename.replace(/\.(mp3|mp4|webm|m4a|opus)$/i, "") : "download";
-                return { url: data.picker[0].url, title };
+            if (data.status === "picker" && data.picker?.[0]?.url) {
+                return { url: data.picker[0].url, title: data.filename || "download" };
             }
-        } catch (e: any) { }
+        } catch { }
     }
     return null;
 }
 
 // ── Phase 3: Piped API ──
-async function tryPiped(
-    instance: string,
-    videoId: string,
-    type: string,
-): Promise<{ url: string; title: string } | null> {
+async function tryPiped(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const res = await fetch(`${instance}/streams/${videoId}`, {
         headers: { "User-Agent": "Mozilla/5.0" },
         signal: AbortSignal.timeout(6000),
     });
-
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const streams = type === "audio" ? data.audioStreams : data.videoStreams;
-    if (!streams || streams.length === 0) throw new Error(`No streams`);
-
-    let stream = type === "audio"
+    if (!streams?.length) throw new Error("No streams");
+    const stream = type === "audio"
         ? (streams.find((s: any) => s.codec === "opus") || streams[0])
         : (streams.find((s: any) => s.quality === "720p") || streams[0]);
-
     if (stream?.url) return { url: stream.url, title: data.title || "download" };
-    throw new Error(`No URL`);
+    throw new Error("No URL");
 }
 
 // ── Phase 4: Invidious API ──
-async function tryInvidious(
-    instance: string,
-    videoId: string,
-    type: string,
-): Promise<{ url: string; title: string } | null> {
+async function tryInvidious(instance: string, videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const res = await fetch(`${instance}/api/v1/videos/${videoId}?local=true`, {
         headers: { "User-Agent": "Mozilla/5.0" },
         signal: AbortSignal.timeout(6000),
     });
-
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const formats = data.adaptiveFormats || [];
-    let format = type === "audio"
-        ? formats.find((f: any) => f.type?.includes("audio"))
-        : formats.find((f: any) => f.type?.includes("video"));
-
+    const format = formats.find((f: any) => f.type?.includes(type === "audio" ? "audio" : "video"));
     if (format?.url) return { url: format.url, title: data.title || "download" };
-    throw new Error(`No URL`);
+    throw new Error("No URL");
 }
 
-// ── Parallel race helper ──
+// ── Race helper ──
 async function raceInstances<T>(
     instances: string[],
     fn: (instance: string) => Promise<T | null>,
-    label: string,
 ): Promise<T | null> {
     const promises = instances.map((inst) =>
-        fn(inst).then((result) => {
-            if (!result) throw new Error(`${inst}: null`);
-            return result;
-        })
+        fn(inst).then((result) => { if (!result) throw new Error("null"); return result; })
     );
-    try {
-        return await Promise.any(promises);
-    } catch {
-        return null;
-    }
+    try { return await Promise.any(promises); } catch { return null; }
 }
 
 // ── Full extraction pipeline ──
-async function extractStream(
-    videoId: string,
-    type: string,
-): Promise<{ url: string; title: string } | null> {
-    const phaseErrors: string[] = [];
+async function extractStream(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    const errors: string[] = [];
 
-    // Phase 1: yt-dlp (most reliable, handles all deciphering natively using compiled python binary)
+    // Phase 1: ytdl-core (pure JS, best for Vercel)
     try {
-        const result = await extractViaYtDlp(videoId, type);
+        const result = await extractViaYtdlCore(videoId, type);
         if (result) return result;
+        errors.push("P1:no URL in formats");
     } catch (e: any) {
-        phaseErrors.push(`P1:${e?.message || e}`);
+        errors.push(`P1:${e?.message}`);
     }
 
-    // Phase 2: Cobalt API (if working nodes exist)
+    // Phase 2: Cobalt
     try {
         const result = await extractViaCobalt(videoId, type);
         if (result) return result;
-        phaseErrors.push("P2:Cobalt returned null");
+        errors.push("P2:Cobalt null");
     } catch (e: any) {
-        phaseErrors.push(`P2:${e?.message || e}`);
+        errors.push(`P2:${e?.message}`);
     }
 
-    // Phase 3: Piped fleet (parallel)
-    const shuffledPiped = [...PIPED_INSTANCES].sort(() => Math.random() - 0.5);
-    const pipedResult = await raceInstances(shuffledPiped, (inst) => tryPiped(inst, videoId, type), "Piped");
+    // Phase 3: Piped (parallel)
+    const pipedResult = await raceInstances(
+        [...PIPED_INSTANCES].sort(() => Math.random() - 0.5),
+        (inst) => tryPiped(inst, videoId, type),
+    );
     if (pipedResult) return pipedResult;
-    phaseErrors.push("P3:All Piped instances failed");
+    errors.push("P3:All Piped failed");
 
-    // Phase 4: Invidious fleet (parallel)
-    const shuffledInv = [...INVIDIOUS_INSTANCES].sort(() => Math.random() - 0.5);
-    const invResult = await raceInstances(shuffledInv, (inst) => tryInvidious(inst, videoId, type), "Invidious");
+    // Phase 4: Invidious (parallel)
+    const invResult = await raceInstances(
+        [...INVIDIOUS_INSTANCES].sort(() => Math.random() - 0.5),
+        (inst) => tryInvidious(inst, videoId, type),
+    );
     if (invResult) return invResult;
-    phaseErrors.push("P4:All Invidious instances failed");
+    errors.push("P4:All Invidious failed");
 
-    throw new Error(`All extraction methods failed | ${phaseErrors.join(" | ")}`);
+    throw new Error(`All extraction methods failed: ${errors.join(" | ")}`);
 }
 
 // ── Main Route Handler ──
@@ -253,14 +202,12 @@ export async function GET(request: NextRequest) {
     if (!videoId && !action && !directUrl)
         return NextResponse.json({ error: "Missing video ID" }, { status: 400 });
 
+    // Proxy action
     if (action === "proxy") {
         const targetUrl = searchParams.get("url");
         if (!targetUrl) return NextResponse.json({ error: "Missing URL" }, { status: 400 });
         try {
-            const proxyRes = await fetch(targetUrl, {
-                headers: { "User-Agent": "Mozilla/5.0" },
-                signal: AbortSignal.timeout(15000),
-            });
+            const proxyRes = await fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) });
             const data = await proxyRes.text();
             return new NextResponse(data, {
                 status: proxyRes.status,
@@ -275,29 +222,21 @@ export async function GET(request: NextRequest) {
 
     if (shouldPipe) {
         if (!videoId && !directUrl)
-            return NextResponse.json({ error: "Missing ID for piping" }, { status: 400 });
+            return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
         try {
-            console.log(`Download: ${videoId || "Direct"} (${type}) [Direct: ${!!directUrl}]`);
-
+            // Direct URL proxy
             if (directUrl) {
-                const isGoogle = directUrl.includes("googlevideo.com");
-                const headers: Record<string, string> = {
-                    "User-Agent": "Mozilla/5.0",
-                    Accept: "*/*",
-                    Range: "bytes=0-",
-                    Connection: "keep-alive",
-                };
-                if (isGoogle) {
+                const headers: Record<string, string> = { "User-Agent": "Mozilla/5.0", Accept: "*/*", Range: "bytes=0-" };
+                if (directUrl.includes("googlevideo.com")) {
                     headers["Origin"] = "https://www.youtube.com";
                     headers["Referer"] = "https://www.youtube.com/";
                 }
-
                 const streamResponse = await fetch(directUrl, { headers, signal: AbortSignal.timeout(30000) });
                 if (streamResponse.ok) {
+                    const ext = type === "audio" ? "mp3" : "mp4";
                     const h = new Headers();
                     h.set("Content-Type", streamResponse.headers.get("Content-Type") || (type === "audio" ? "audio/mpeg" : "video/mp4"));
-                    const ext = type === "audio" ? "mp3" : "mp4";
                     h.set("Content-Disposition", `attachment; filename="download.${ext}"`);
                     if (streamResponse.headers.get("Content-Length")) h.set("Content-Length", streamResponse.headers.get("Content-Length")!);
                     h.set("Accept-Ranges", "bytes");
@@ -319,18 +258,14 @@ export async function GET(request: NextRequest) {
 
             if (!result?.url) throw new Error("All extraction methods exhausted");
 
-            const streamHeaders: Record<string, string> = {
-                "User-Agent": "Mozilla/5.0",
-                Range: "bytes=0-",
-                Connection: "keep-alive",
-            };
+            // Pipe stream through server
+            const streamHeaders: Record<string, string> = { "User-Agent": "Mozilla/5.0", Range: "bytes=0-" };
             if (result.url.includes("googlevideo.com")) {
                 streamHeaders["Origin"] = "https://www.youtube.com";
                 streamHeaders["Referer"] = "https://www.youtube.com/";
             }
-
             const streamResponse = await fetch(result.url, { headers: streamHeaders, signal: AbortSignal.timeout(30000) });
-            if (!streamResponse.ok) throw new Error(`Stream failed: ${streamResponse.status}`);
+            if (!streamResponse.ok) throw new Error(`Stream fetch: ${streamResponse.status}`);
 
             const ext = type === "audio" ? "mp3" : "mp4";
             const h = new Headers();
@@ -338,20 +273,17 @@ export async function GET(request: NextRequest) {
             h.set("Content-Disposition", `attachment; filename="${result.title.replace(/[^\w\s-]/g, "")}.${ext}"`);
             if (streamResponse.headers.get("Content-Length")) h.set("Content-Length", streamResponse.headers.get("Content-Length")!);
             h.set("Accept-Ranges", "bytes");
-
             return new NextResponse(streamResponse.body, { headers: h });
+
         } catch (e: any) {
             console.error("Download error:", e);
-            return NextResponse.json({ error: `Download failed: ${e?.message || "All extraction methods exhausted"}` }, { status: 500 });
+            return NextResponse.json({ error: `Download failed: ${e?.message}` }, { status: 500 });
         }
     }
 
+    // Probe mode
     const probeType = async (t: string) => {
-        try {
-            return await extractStream(videoId!, t);
-        } catch {
-            return null;
-        }
+        try { return await extractStream(videoId!, t); } catch { return null; }
     };
 
     const fallbackUrl = `https://cobalt.tools/#${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;

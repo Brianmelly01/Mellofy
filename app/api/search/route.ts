@@ -81,13 +81,22 @@ export async function GET(request: NextRequest) {
                         artist = artist.replace(" - Topic", "");
                     }
 
+                    // Extract duration as a readable string — item.duration is an object
+                    let duration = "";
+                    if (item.duration?.text) {
+                        duration = String(item.duration.text);
+                    } else if (typeof item.duration?.seconds === "number") {
+                        const secs = item.duration.seconds;
+                        duration = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+                    }
+
                     return {
                         id: item.id || "",
                         title,
                         artist,
                         thumbnail: item.thumbnail?.contents?.[0]?.url || "",
                         url: `https://www.youtube.com/watch?v=${item.id}`,
-                        duration: item.duration?.toString() || "",
+                        duration,
                         type: "video" as const,
                     };
                 });
