@@ -4,6 +4,7 @@ import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { Video, Music, Loader2, Download, Heart, Plus, ListMusic } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLibraryStore } from "@/lib/store/useLibraryStore";
+import { useDownloadStore } from "@/lib/store/useDownloadStore";
 import { cn } from "@/lib/utils";
 
 interface SearchContentProps {
@@ -22,6 +23,7 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
         hubProgress
     } = usePlayerStore();
     const { toggleLike, isLiked, playlists, addToPlaylist } = useLibraryStore();
+    const { saveTrack } = useDownloadStore();
     const [results, setResults] = useState<Track[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -59,13 +61,15 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     const handleDownload = async (track: Track, type: 'audio' | 'video' | 'both') => {
         openHub(track);
 
-        const triggerBrowserDownload = (url: string, filename: string) => {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        const saveToApp = async (proxyUrl: string, targetType: 'audio' | 'video') => {
+            setHubProgress(60);
+            const dlRes = await fetch(proxyUrl);
+            if (!dlRes.ok) throw new Error("Blob fetch failed");
+            const blob = await dlRes.blob();
+            setHubProgress(80);
+            await saveTrack(track, targetType, blob);
+            setHubProgress(100);
+            return true;
         };
 
         const downloadOne = async (targetType: 'audio' | 'video') => {
@@ -83,9 +87,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) {
-                        setHubProgress(100);
                         const proxyUrl = `/api/download?action=proxy&url=${encodeURIComponent(data.url)}&download=true&title=${encodeURIComponent(track.title)}&ext=.${ext}`;
-                        triggerBrowserDownload(proxyUrl, data.filename || filename);
+                        await saveToApp(proxyUrl, targetType);
                         return true;
                     }
                 } else {

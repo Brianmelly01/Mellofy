@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Compass, Library, User } from "lucide-react";
+import { Home, Compass, Library, User, HardDriveDownload } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ const navItems = [
     { icon: Home, label: "Home", href: "/" },
     { icon: Compass, label: "Browse", href: "/browse" },
     { icon: Library, label: "Library", href: "/library" },
+    { icon: HardDriveDownload, label: "Offline", href: "/downloads" },
     { icon: User, label: "Profile", href: "/profile" },
 ];
 

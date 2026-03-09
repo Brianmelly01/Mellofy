@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { usePlayerStore, Track } from "@/lib/store/usePlayerStore";
 import { useLibraryStore } from "@/lib/store/useLibraryStore";
+import { useDownloadStore } from "@/lib/store/useDownloadStore";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactPlayer from "react-player";
@@ -74,6 +75,7 @@ const Player = () => {
     } = usePlayerStore();
 
     const { toggleLike, isLiked } = useLibraryStore();
+    const { saveTrack, isDownloaded, getTrackBlob } = useDownloadStore();
 
     const playerRef = useRef<any>(null);
     const currentExtractId = useRef<string | null>(null);
@@ -120,6 +122,18 @@ const Player = () => {
 
         const extractStream = async () => {
             try {
+                // [OFFLINE CHECK] If the track is downloaded, skip the network and play the local blob!
+                if (isDownloaded(storeTrack.id) && playbackMode === 'audio') {
+                    console.log("[Player] Playing from offline storage");
+                    const blob = await getTrackBlob(storeTrack.id);
+                    if (blob) {
+                        const objectUrl = URL.createObjectURL(blob);
+                        setStreamUrl(objectUrl);
+                        setIsLoadingStream(false);
+                        return; // Exit early, no API needed
+                    }
+                }
+
                 const { url: rawUrl } = await clientSideProbe(storeTrack.id, playbackMode);
 
                 // Ignore result if track changed while we were fetching
@@ -164,6 +178,18 @@ const Player = () => {
         const attemptDownloadOne = async (t: 'audio' | 'video') => {
             const filename = `${track.title.replace(/[^\w\s-]/g, "")}.${t === 'audio' ? 'mp3' : 'mp4'}`;
 
+            // Helper to fetch blob and save to IndexedDB
+            const saveToApp = async (proxyUrl: string) => {
+                setHubProgress(60);
+                const dlRes = await fetch(proxyUrl);
+                if (!dlRes.ok) throw new Error("Blob fetch failed");
+                const blob = await dlRes.blob();
+                setHubProgress(80);
+                await saveTrack(track, t, blob);
+                setHubProgress(90);
+                return true;
+            };
+
             // ── Phase A: Server-side extraction pipeline ──
             try {
                 setHubProgress(15);
@@ -174,10 +200,10 @@ const Player = () => {
                 if (res.ok) {
                     const data = await res.json();
                     if (data.url) {
-                        setHubProgress(90);
+                        setHubProgress(40);
                         const ext = t === 'audio' ? '.mp3' : '.mp4';
                         const proxyUrl = `/api/download?action=proxy&url=${encodeURIComponent(data.url)}&download=true&title=${encodeURIComponent(track.title)}&ext=${ext}`;
-                        triggerLink(proxyUrl, data.filename || filename);
+                        await saveToApp(proxyUrl);
                         return true;
                     }
                 } else {
@@ -188,15 +214,14 @@ const Player = () => {
             }
 
             // ── Phase B: Cobalt API directly from browser ──
-            // Browser IPs are not blocked by Cobalt — only datacenter IPs are.
             try {
-                setHubProgress(55);
+                setHubProgress(50);
                 const cobalt = await cobaltBrowserExtract(track.id, t);
                 if (cobalt?.url) {
-                    setHubProgress(90);
+                    setHubProgress(60);
                     const ext = t === 'audio' ? '.mp3' : '.mp4';
                     const proxyUrl = `/api/download?action=proxy&url=${encodeURIComponent(cobalt.url)}&download=true&title=${encodeURIComponent(track.title)}&ext=${ext}`;
-                    triggerLink(proxyUrl, cobalt.filename || filename);
+                    await saveToApp(proxyUrl);
                     return true;
                 }
             } catch (e: any) {
