@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import Innertube, { UniversalCache } from "youtubei.js";
+import Innertube, { UniversalCache, Platform } from "youtubei.js";
 import ytdl from "@distube/ytdl-core";
-import youtubedl from "youtube-dl-exec";
+import { Jinter } from "jintr";
+
+// Patch Platform.shim.eval with Jintr so youtubei.js can decipher URL signatures
+// This runs once at module load, before any Innertube instance is created.
+try {
+    (Platform.shim as any).eval = (data: any, env: Record<string, any>) => {
+        const jinter = new Jinter();
+        for (const [key, val] of Object.entries(env)) {
+            jinter.scope.set(key, val);
+        }
+        jinter.evaluate(data.script);
+        const result: Record<string, any> = {};
+        for (const [key] of Object.entries(env)) {
+            result[key] = jinter.scope.get(key);
+        }
+        return result;
+    };
+} catch { /* Platform.shim might not be loaded yet - it will auto-patch on first use */ }
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -130,6 +147,21 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
     console.log(`ytjs: Trying ${videoId} (${type})...`);
     try {
         const yt = await getYTClient();
+
+        // Ensure Jintr is applied to the shim after instance creation
+        (Platform.shim as any).eval = (data: any, env: Record<string, any>) => {
+            const jinter = new Jinter();
+            for (const [key, val] of Object.entries(env)) {
+                jinter.scope.set(key, val);
+            }
+            jinter.evaluate(data.script);
+            const result: Record<string, any> = {};
+            for (const [key] of Object.entries(env)) {
+                result[key] = jinter.scope.get(key);
+            }
+            return result;
+        };
+
         const info = await yt.getBasicInfo(videoId);
         const allFormats = [
             ...(info.streaming_data?.adaptive_formats || []),
@@ -139,50 +171,36 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
         const title = info.basic_info?.title || "download";
 
         if (type === "audio") {
+            // Audio formats have direct URLs (no cipher needed)
             const audioFormats = allFormats.filter((f: any) => f.has_audio && !f.has_video && !!f.url);
-            // Sort by bitrate descending
             audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
             const url = audioFormats?.[0]?.url;
             if (url) return { url, title };
         } else {
-            // For video streaming, prefer youtubei.js direct deciphered streams if they happen to exist
-            const combined = allFormats.filter((f: any) => f.has_video && f.has_audio && !!f.url);
-            combined.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-            let url = combined?.[0]?.url;
+            // Video formats: try combined (audio+video) first, decipher if needed
+            const combined = allFormats.filter((f: any) => f.has_video && f.has_audio);
+            combined.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
 
-            if (!url) {
-                const videoOnly = allFormats.filter((f: any) => f.has_video && !!f.url);
-                videoOnly.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-                url = videoOnly?.[0]?.url;
+            for (const fmt of combined) {
+                try {
+                    const url = fmt.url || await fmt.decipher(yt.session.player);
+                    if (url) return { url, title };
+                } catch { continue; }
             }
-            if (url) return { url, title };
+
+            // Fall back to video-only track (no audio), still useful for display
+            const videoOnly = allFormats.filter((f: any) => f.has_video);
+            videoOnly.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
+            for (const fmt of videoOnly) {
+                try {
+                    const url = fmt.url || await fmt.decipher(yt.session.player);
+                    if (url) return { url, title };
+                } catch { continue; }
+            }
         }
     } catch (e: any) {
         console.error("ytjs error:", e.message?.slice(0, 100));
     }
-
-    // Video Fallback: use youtube-dl-exec for deciphering if youtubei.js failed
-    if (type === "video") {
-        console.log(`yt-dlp: Falling back on ${videoId} for video deciphering...`);
-        try {
-            const info = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
-                dumpSingleJson: true,
-                noCheckCertificates: true,
-                noWarnings: true,
-                preferFreeFormats: true,
-                addHeader: ['referer:youtube.com', 'user-agent:googlebot'],
-            });
-            const allFormats = (info as any).formats;
-            const combined = allFormats.filter((f: any) => f.vcodec !== 'none' && f.acodec !== 'none' && f.ext === 'mp4');
-            if (combined.length > 0) {
-                combined.sort((a: any, b: any) => (b.tbr || 0) - (a.tbr || 0));
-                if (combined[0].url) return { url: combined[0].url, title: (info as any).title || "download" };
-            }
-        } catch (e: any) {
-            console.error("yt-dlp error:", e.message?.slice(0, 100));
-        }
-    }
-
     return null;
 }
 
