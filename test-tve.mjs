@@ -1,33 +1,36 @@
-import Innertube, { UniversalCache } from "youtubei.js";
+import { Innertube, UniversalCache } from 'youtubei.js';
 
-async function test() {
+async function testTve() {
+    console.log("Creating Innertube with TV_EMBEDDED...");
     try {
         const yt = await Innertube.create({
-            retrieve_player: false,
+            retrieve_player: true,
             generate_session_locally: true,
             cache: new UniversalCache(false),
             client_type: "TV_EMBEDDED"
         });
 
-        console.log("Fetching basic info for TV_EMBEDDED...");
+        console.log("Getting info...");
         const info = await yt.getBasicInfo("dQw4w9WgXcQ", "TV_EMBEDDED");
-
         const allFormats = [
             ...(info.streaming_data?.adaptive_formats || []),
             ...(info.streaming_data?.formats || [])
         ];
-        console.log("Formats:", allFormats.length);
 
-        const withUrl = allFormats.filter(f => !!f.url);
-        console.log("With URL:", withUrl.length);
-
-        if (withUrl.length > 0) {
-            const format = withUrl.find(f => f.mime_type.includes('audio')) || withUrl[0];
-            console.log("Success! Audio URL:", format.url.slice(0, 50));
-
-            const res = await fetch(format.url, { method: "HEAD" });
-            console.log("HTTP status via TV_EMBEDDED:", res.status);
+        console.log("Total formats:", allFormats.length);
+        const combined = allFormats.filter(f => f.has_video && f.has_audio);
+        if (combined.length > 0) {
+            combined.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            console.log("COMBINED URL:", !!combined[0].url);
+        } else {
+            console.log("No combined formats found. Trying video-only...");
+            const videoOnly = allFormats.filter(f => f.has_video);
+            if (videoOnly.length > 0) {
+                console.log("VIDEO ONLY URL:", !!videoOnly[0].url);
+            }
         }
-    } catch (e) { console.error("Error:", e.stack); }
+    } catch (e) {
+        console.error("Error:", e.message);
+    }
 }
-test();
+testTve();

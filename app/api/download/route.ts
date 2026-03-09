@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Innertube, { UniversalCache } from "youtubei.js";
 import ytdl from "@distube/ytdl-core";
+import youtubedl from "youtube-dl-exec";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -119,8 +120,7 @@ async function getYTClient() {
         ytClient = await Innertube.create({
             retrieve_player: true,
             generate_session_locally: true,
-            cache: new UniversalCache(false),
-            client_type: "ANDROID" as any
+            cache: new UniversalCache(false)
         });
     }
     return ytClient;
@@ -130,7 +130,7 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
     console.log(`ytjs: Trying ${videoId} (${type})...`);
     try {
         const yt = await getYTClient();
-        const info = await yt.getBasicInfo(videoId, "ANDROID");
+        const info = await yt.getBasicInfo(videoId);
         const allFormats = [
             ...(info.streaming_data?.adaptive_formats || []),
             ...(info.streaming_data?.formats || [])
@@ -145,7 +145,7 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
             const url = audioFormats?.[0]?.url;
             if (url) return { url, title };
         } else {
-            // For video streaming in ReactPlayer, try to get a multiplexed format (audio+video)
+            // For video streaming, prefer youtubei.js direct deciphered streams if they happen to exist
             const combined = allFormats.filter((f: any) => f.has_video && f.has_audio && !!f.url);
             combined.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
             let url = combined?.[0]?.url;
@@ -160,6 +160,29 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
     } catch (e: any) {
         console.error("ytjs error:", e.message?.slice(0, 100));
     }
+
+    // Video Fallback: use youtube-dl-exec for deciphering if youtubei.js failed
+    if (type === "video") {
+        console.log(`yt-dlp: Falling back on ${videoId} for video deciphering...`);
+        try {
+            const info = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+                dumpSingleJson: true,
+                noCheckCertificates: true,
+                noWarnings: true,
+                preferFreeFormats: true,
+                addHeader: ['referer:youtube.com', 'user-agent:googlebot'],
+            });
+            const allFormats = info.formats;
+            const combined = allFormats.filter((f: any) => f.vcodec !== 'none' && f.acodec !== 'none' && f.ext === 'mp4');
+            if (combined.length > 0) {
+                combined.sort((a: any, b: any) => (b.tbr || 0) - (a.tbr || 0));
+                if (combined[0].url) return { url: combined[0].url, title: info.title || "download" };
+            }
+        } catch (e: any) {
+            console.error("yt-dlp error:", e.message?.slice(0, 100));
+        }
+    }
+
     return null;
 }
 

@@ -1,15 +1,28 @@
-import ytdl from "@distube/ytdl-core";
-async function test() {
-    try {
-        console.log("ytdl-core fetching...");
-        const info = await ytdl.getInfo("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-        const format = ytdl.chooseFormat(info.formats, { filter: "audioonly" });
-        console.log("Success! audio url:", format.url.slice(0, 50));
+import youtubedl from 'youtube-dl-exec';
 
-        const res = await fetch(format.url, { method: "HEAD" });
-        console.log("HTTP status:", res.status);
+async function testYtdlp() {
+    const videoId = "dQw4w9WgXcQ";
+    console.log(`yt-dlp: Trying ${videoId}...`);
+    try {
+        const info = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+            dumpSingleJson: true,
+            noCheckCertificates: true,
+            noWarnings: true,
+            preferFreeFormats: true,
+            addHeader: ['referer:youtube.com', 'user-agent:googlebot'],
+        });
+
+        const allFormats = info.formats;
+        console.log("Total formats:", allFormats.length);
+
+        const combined = allFormats.filter(f => f.vcodec !== 'none' && f.acodec !== 'none' && f.ext === 'mp4');
+        if (combined.length > 0) {
+            console.log("COMBINED URL:", !!combined[0].url);
+        } else {
+            console.log("No combined formats found.");
+        }
     } catch (e) {
-        console.error("ytdl-core error:", e.message);
+        console.error("ytdlp error:", e.message);
     }
 }
-test();
+testYtdlp();
