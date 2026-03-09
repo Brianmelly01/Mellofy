@@ -82,9 +82,11 @@ const Player = () => {
     const [prevVolume, setPrevVolume] = useState(volume);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const downloadMenuRef = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
 
     // Close download menu when clicking outside
     useEffect(() => {
+        setMounted(true);
         const handleClickOutside = (e: MouseEvent) => {
             if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
                 setShowDownloadMenu(false);
@@ -125,7 +127,8 @@ const Player = () => {
 
                 if (rawUrl) {
                     // Pass the stream URL through our local proxy to avoid CORS/header issues in ReactPlayer
-                    const url = `/api/download?action=proxy&url=${encodeURIComponent(rawUrl)}`;
+                    const ext = playbackMode === 'audio' ? '.mp3' : '.mp4';
+                    const url = `/api/download?action=proxy&url=${encodeURIComponent(rawUrl)}&ext=${ext}`;
                     setStreamUrl(url);
                 } else {
                     setIsLoadingStream(false);
@@ -227,6 +230,8 @@ const Player = () => {
         }
     };
 
+    if (!mounted) return null;
+
     return (
         <>
             <AnimatePresence>
@@ -262,6 +267,8 @@ const Player = () => {
                                         onBufferEnd: () => setIsLoadingStream(false),
                                         config: {
                                             file: {
+                                                forceVideo: playbackMode === 'video',
+                                                forceAudio: playbackMode === 'audio',
                                                 attributes: {
                                                     controlsList: 'nodownload',
                                                     className: "w-full h-full object-contain"

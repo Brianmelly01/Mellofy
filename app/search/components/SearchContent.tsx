@@ -159,9 +159,9 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
     return (
         <>
             <div className="flex flex-col gap-y-3 w-full pb-20">
-                {results.map((song) => (
+                {results.map((song, index) => (
                     <div
-                        key={song.id}
+                        key={`${song.id}-${index}`}
                         className="flex items-center gap-x-4 w-full group hover:bg-white/5 p-2 rounded-[20px] transition-all cursor-pointer border border-transparent hover:border-white/5"
                     >
                         <div className="flex-1 flex items-center gap-x-4 min-w-0">

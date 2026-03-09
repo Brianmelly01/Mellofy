@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import ytdl from "@distube/ytdl-core";
+import youtubedl from "youtube-dl-exec";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -111,9 +112,54 @@ async function raceInstances<T>(
     try { return await Promise.any(promises); } catch { return null; }
 }
 
+// ── Phase 0: Local yt-dlp ──
+async function extractViaYtDlp(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    console.log(`yt-dlp: Trying ${videoId} (${type})...`);
+    try {
+        const output = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+            dumpSingleJson: true,
+            noCheckCertificates: true,
+            noWarnings: true,
+            preferFreeFormats: true,
+            addHeader: [
+                'referer:youtube.com',
+                'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+            ]
+        });
+
+        if (type === "audio") {
+            const audioFormats = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec === 'none');
+            const url = audioFormats?.[0]?.url;
+            if (url) return { url, title: output.title || "download" };
+        } else {
+            // For video streaming in ReactPlayer, we need a single URL containing both video and audio.
+            const combined = output.formats.filter((f: any) => f.vcodec !== 'none' && f.acodec !== 'none');
+            let url = combined?.[combined.length - 1]?.url || combined?.[0]?.url;
+
+            if (!url) {
+                const bestVideo = output.formats.filter((f: any) => f.vcodec !== 'none');
+                url = bestVideo?.[bestVideo.length - 1]?.url;
+            }
+            if (url) return { url, title: output.title || "download" };
+        }
+    } catch (e: any) {
+        console.error("yt-dlp error:", e.message?.slice(0, 100));
+    }
+    return null;
+}
+
 // ── Full extraction pipeline ──
 async function extractStream(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const errors: string[] = [];
+
+    // Phase 0: Local yt-dlp
+    try {
+        const result = await extractViaYtDlp(videoId, type);
+        if (result) return result;
+        errors.push("P0:yt-dlp null");
+    } catch (e: any) {
+        errors.push(`P0:${e?.message}`);
+    }
 
     // Phase 1 & 2: Cobalt
     try {
@@ -161,14 +207,41 @@ export async function GET(request: NextRequest) {
         const targetUrl = searchParams.get("url");
         if (!targetUrl) return NextResponse.json({ error: "Missing URL" }, { status: 400 });
         try {
-            const proxyRes = await fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) });
-            const data = await proxyRes.text();
-            return new NextResponse(data, {
+            const reqHeaders = new Headers(request.headers);
+            const headers: Record<string, string> = {
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "*/*",
+            };
+
+            // Forward Range header for partial content requests (video seeking)
+            if (reqHeaders.has("range")) {
+                headers["Range"] = reqHeaders.get("range")!;
+            }
+
+            // Bypass restrictions for googlevideo streams
+            if (targetUrl.includes("googlevideo.com")) {
+                headers["Origin"] = "https://www.youtube.com";
+                headers["Referer"] = "https://www.youtube.com/";
+            }
+
+            const proxyRes = await fetch(targetUrl, { headers });
+            const resHeaders = new Headers();
+            resHeaders.set("Content-Type", proxyRes.headers.get("Content-Type") || "video/mp4");
+
+            if (proxyRes.headers.has("Content-Length")) {
+                resHeaders.set("Content-Length", proxyRes.headers.get("Content-Length")!);
+            }
+            if (proxyRes.headers.has("Content-Range")) {
+                resHeaders.set("Content-Range", proxyRes.headers.get("Content-Range")!);
+            }
+            resHeaders.set("Accept-Ranges", proxyRes.headers.get("Accept-Ranges") || "bytes");
+
+            return new NextResponse(proxyRes.body, {
                 status: proxyRes.status,
-                headers: { "Content-Type": proxyRes.headers.get("Content-Type") || "application/json" },
+                headers: resHeaders,
             });
-        } catch {
-            return NextResponse.json({ error: "Proxy failed" }, { status: 500 });
+        } catch (e: any) {
+            return NextResponse.json({ error: "Proxy failed: " + e.message }, { status: 500 });
         }
     }
 
