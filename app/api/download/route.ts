@@ -172,11 +172,11 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
                 preferFreeFormats: true,
                 addHeader: ['referer:youtube.com', 'user-agent:googlebot'],
             });
-            const allFormats = info.formats;
+            const allFormats = (info as any).formats;
             const combined = allFormats.filter((f: any) => f.vcodec !== 'none' && f.acodec !== 'none' && f.ext === 'mp4');
             if (combined.length > 0) {
                 combined.sort((a: any, b: any) => (b.tbr || 0) - (a.tbr || 0));
-                if (combined[0].url) return { url: combined[0].url, title: info.title || "download" };
+                if (combined[0].url) return { url: combined[0].url, title: (info as any).title || "download" };
             }
         } catch (e: any) {
             console.error("yt-dlp error:", e.message?.slice(0, 100));
