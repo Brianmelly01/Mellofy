@@ -1,0 +1,245 @@
+.bgContainer {
+  background: #02050e; /* Dark theme background mimicking the screen */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  font-family: 'Poppins', sans-serif;
+  color: #fff;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+}
+
+.container {
+  position: relative;
+  width: 850px;
+  height: 500px;
+  background: #050a10; /* Very dark inner background */
+  border: 2px solid #00f3ff;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.2);
+  overflow: hidden;
+}
+
+/* Common forms layout */
+.formContainer {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0 60px;
+  transition: all 0.6s ease-in-out;
+  z-index: 1;
+}
+
+/* Left form (Login) visible by default */
+.signInContainer {
+  left: 0;
+  z-index: 2;
+}
+
+/* Right form (Register) hidden by default */
+.signUpContainer {
+  right: 0;
+  opacity: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* When rightPanelActive is added, swap the opacities */
+.container.rightPanelActive .signInContainer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.container.rightPanelActive .signUpContainer {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 30px;
+  letter-spacing: 0.5px;
+}
+
+.inputGroup {
+  position: relative;
+  width: 100%;
+  margin-bottom: 25px;
+}
+
+.inputField {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.4);
+  padding: 10px 30px 10px 0;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.inputField:focus {
+  border-bottom-color: #00f3ff;
+}
+
+.inputField::placeholder {
+  color: #999;
+  font-weight: 500;
+}
+
+.icon {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  fill: #fff;
+  opacity: 0.8;
+}
+
+/* Pill Button */
+.btn {
+  background: linear-gradient(90deg, #104e6c, #26abc9);
+  border: 1px solid rgba(0, 243, 255, 0.6);
+  border-radius: 30px;
+  padding: 12px 0;
+  width: 100%;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: all 0.3s, filter 0.3s;
+  letter-spacing: 0.5px;
+}
+
+.btn:hover {
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+  filter: brightness(1.15);
+}
+
+/* Links at the bottom */
+.switchText {
+  margin-top: 25px;
+  font-size: 12px;
+  color: #ccc;
+  text-align: center;
+}
+
+.switchText button {
+  background: none;
+  border: none;
+  color: #00f3ff;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  transition: text-shadow 0.3s;
+}
+
+.switchText button:hover {
+  text-shadow: 0 0 8px rgba(0, 243, 255, 0.8);
+}
+
+/* Sliding Teal Overlay */
+.overlayContainer {
+  position: absolute;
+  top: 0;
+  left: 45%; 
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(135deg, #0f3a4b 0%, #1c819d 100%);
+  z-index: 100;
+  transition: all 0.7s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  /* Slanted Left edge for the Login view (right position) */
+  clip-path: polygon(20% 0, 100% 0, 100% 100%, 0 100%);
+}
+
+/* Move to left and invert slant when opening Register */
+.container.rightPanelActive .overlayContainer {
+  left: 0;
+  /* Slanted Right edge for the Register view (left position) */
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);
+}
+
+/* Moving inner text container of overlay */
+.overlayContent {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.overlayPanel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  transition: transform 0.6s ease-in-out, opacity 0.5s ease;
+}
+
+/* The left side of overlay content (shows when overlay is left/Register) */
+.overlayLeft {
+  opacity: 0;
+  transform: translateX(-50px);
+  padding-right: 20%; /* Keep text away from right slant */
+}
+
+/* The right side of overlay content (shows when overlay is right/Login) */
+.overlayRight {
+  opacity: 1;
+  transform: translateX(0);
+  padding-left: 20%; /* Keep text away from left slant */
+}
+
+.container.rightPanelActive .overlayLeft {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.container.rightPanelActive .overlayRight {
+  opacity: 0;
+  transform: translateX(50px);
+  pointer-events: none;
+}
+
+.overlayPanel h1 {
+  font-size: 38px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.5);
+  line-height: 1.2;
+}
