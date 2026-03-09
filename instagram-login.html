@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instagram</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Dancing+Script:wght@700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --ig-blue: #0095f6;
+            --ig-blue-hover: #0186db;
+            --ig-blue-faded: #4cb5f9;
+            --ig-border: #dbdbdb;
+            --ig-bg: #fafafa;
+            --ig-fb: #1877f2;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000;
+            min-height: 100vh;
+        }
+
+        /* ═══════════════════════════════════
+       REEL PAGE (default view)
+    ════════════════════════════════════ */
+        #reelPage {
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* Blurred reel background */
+        .reel-bg {
+            position: fixed;
+            inset: 0;
+            background:
+                linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+                url('https://picsum.photos/seed/reel99/1280/720') center/cover no-repeat;
+            filter: blur(2px);
+            z-index: 0;
+        }
+
+        /* ── TOP NAV ── */
+        .top-nav {
+            position: relative;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 24px;
+            background: #fff;
+            border-bottom: 1px solid var(--ig-border);
+        }
+
+        .nav-logo {
+            font-family: 'Dancing Script', cursive;
+            font-size: 28px;
+            font-weight: 700;
+            color: #000;
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn-nav-login {
+            background: var(--ig-blue);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 7px 18px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .18s;
+            font-family: inherit;
+        }
+
+        .btn-nav-login:hover {
+            background: var(--ig-blue-hover);
+        }
+
+        .btn-nav-signup {
+            background: transparent;
+            color: #000;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 7px 10px;
+            font-family: inherit;
+        }
+
+        /* ── REEL CONTENT AREA ── */
+        .reel-content {
+            position: relative;
+            z-index: 5;
+            display: flex;
+            justify-content: center;
+            padding: 24px 16px;
+            min-height: calc(100vh - 57px);
+        }
+
+        /* Simulated reel card */
+        .reel-card {
+            width: 380px;
+            aspect-ratio: 9/16;
+            max-height: 650px;
+            background: linear-gradient(160deg, #1a1a2e, #16213e, #0f3460);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .reel-card img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Reel overlay text */
+        .reel-info {
+            position: relative;
+            z-index: 2;
+            padding: 20px;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+            width: 100%;
+            color: #fff;
+        }
+
+        .reel-username {
+            font-weight: 700;
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        .reel-caption {
+            font-size: 13px;
+            opacity: 0.85;
+            line-height: 1.4;
+        }
+
+        /* Right sidebar icons */
+        .reel-sidebar {
+            position: absolute;
+            right: 12px;
+            bottom: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            z-index: 3;
+        }
+
+        .sidebar-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #fff;
+            font-size: 10px;
+            gap: 4px;
+        }
+
+        .sidebar-icon svg {
+            width: 26px;
+            height: 26px;
+        }
+
+        /* Comment list on right side */
+        .reel-comments {
+            position: relative;
+            z-index: 5;
+            margin-left: 20px;
+            width: 320px;
+            padding-top: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            color: #fff;
+        }
+
+        .comment-item {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .comment-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .comment-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .comment-body {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .comment-name {
+            font-weight: 700;
+            margin-right: 6px;
+        }
+
+        .comment-actions {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 4px;
+            display: flex;
+            gap: 12px;
+        }
+
+        /* ═══════════════════════════════════
+       MODAL
+    ════════════════════════════════════ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal-box {
+            background: #f5f5f5;
+            border-radius: 18px;
+            padding: 40px 32px 32px;
+            width: 360px;
+            text-align: center;
+            position: relative;
+            animation: popIn .22s cubic-bezier(.34, 1.56, .64, 1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: scale(0.88);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 14px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #111;
+            line-height: 1;
+            padding: 4px;
+        }
+
+        .modal-avatar-wrap {
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            background: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin: 0 auto 20px;
+            overflow: hidden;
+        }
+
+        .modal-avatar-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .modal-title {
+            font-size: 22px;
+            font-weight: 800;
+            color: #000;
+            margin-bottom: 8px;
+        }
+
+        .modal-sub {
+            font-size: 15px;
+            color: #555;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .modal-sub strong {
+            color: #000;
+            font-weight: 700;
+        }
+
+        .modal-sub .up-link {
+            color: var(--ig-blue);
+            font-weight: 600;
+        }
+
+        .btn-modal-signup {
+            width: 100%;
+            height: 48px;
+            background: var(--ig-blue);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 14px;
+            transition: background .18s;
+            font-family: inherit;
+        }
+
+        .btn-modal-signup:hover {
+            background: var(--ig-blue-hover);
+        }
+
+        .btn-modal-login {
+            background: none;
+            border: none;
+            color: var(--ig-blue);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .btn-modal-login:hover {
+            text-decoration: underline;
+        }
+
+        /* ═══════════════════════════════════
+       AUTH PAGES (login / signup)
+    ════════════════════════════════════ */
+        #loginPage,
+        #signupPage {
+            display: none;
+            flex-direction: column;
+            min-height: 100vh;
+            background: var(--ig-bg);
+        }
+
+        #loginPage.active,
+        #signupPage.active {
+            display: flex;
+        }
+
+        .auth-main {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 16px;
+        }
+
+        /* Login split layout */
+        .login-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 36px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        /* ── Promo Panel ── */
+        .promo-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .ig-icon {
+            width: 54px;
+            height: 54px;
+        }
+
+        .promo-headline {
+            font-size: 30px;
+            font-weight: 700;
+            color: #000;
+            line-height: 1.35;
+            max-width: 340px;
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #f09433, #dc2743, #bc1888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .phone-collage {
+            position: relative;
+            width: 340px;
+            height: 320px;
+        }
+
+        .story-frame {
+            position: absolute;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+            border: 3px solid #fff;
+        }
+
+        .story-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .story-main {
+            width: 148px;
+            height: 224px;
+            left: 90px;
+            top: 40px;
+            z-index: 3;
+        }
+
+        .story-left {
+            width: 112px;
+            height: 192px;
+            left: 0;
+            top: 68px;
+            z-index: 2;
+            transform: rotate(-4deg);
+        }
+
+        .story-right {
+            width: 112px;
+            height: 192px;
+            right: 10px;
+            top: 60px;
+            z-index: 2;
+            transform: rotate(4deg);
+        }
+
+        .floater {
+            position: absolute;
+            font-size: 26px;
+            z-index: 10;
+            animation: bob 3s ease-in-out infinite;
+        }
+
+        .f1 {
+            left: 20px;
+            bottom: 60px;
+            animation-delay: 0s;
+        }
+
+        .f2 {
+            right: 30px;
+            top: 20px;
+            animation-delay: .8s;
+        }
+
+        .f3 {
+            right: 50px;
+            bottom: 10px;
+            animation-delay: 1.5s;
+        }
+
+        @keyframes bob {
+
+            0%,
+            100% {
+                transform: translateY(0)
+            }
+
+            50% {
+                transform: translateY(-8px)
+            }
+        }
+
+        /* ── Form Panel ── */
+        .form-panel {
+            width: 350px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .auth-card {
+            background: #fff;
+            border: 1px solid var(--ig-border);
+            border-radius: 4px;
+            padding: 32px 40px;
+        }
+
+        .auth-card h1 {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #000;
+        }
+
+        .field-wrap {
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        .field-input {
+            width: 100%;
+            height: 44px;
+            border: 1px solid var(--ig-border);
+            border-radius: 10px;
+            background: #fafafa;
+            padding: 14px 14px 2px;
+            font-size: 13px;
+            font-family: inherit;
+            color: #000;
+            outline: none;
+            transition: border-color .15s;
+        }
+
+        .field-input:focus {
+            border-color: #a8a8a8;
+        }
+
+        .field-label {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: #999;
+            pointer-events: none;
+            transition: all .15s;
+        }
+
+        .field-input:focus~.field-label,
+        .field-input.filled~.field-label {
+            top: 10px;
+            transform: none;
+            font-size: 10px;
+            font-weight: 500;
+            color: #737373;
+        }
+
+        .show-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 13px;
+            font-weight: 700;
+            color: #000;
+            cursor: pointer;
+            display: none;
+            font-family: inherit;
+        }
+
+        .show-toggle.on {
+            display: block;
+        }
+
+        .btn-submit {
+            width: 100%;
+            height: 44px;
+            background: var(--ig-blue);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background .18s, opacity .18s;
+        }
+
+        .btn-submit:disabled {
+            background: #b2dffc;
+            cursor: default;
+        }
+
+        .btn-submit:not(:disabled):hover {
+            background: var(--ig-blue-hover);
+        }
+
+        .forgot {
+            text-align: center;
+            margin-top: 14px;
+        }
+
+        .forgot a {
+            font-size: 13px;
+            color: #737373;
+            text-decoration: none;
+        }
+
+        .forgot a:hover {
+            text-decoration: underline;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin: 18px 0;
+        }
+
+        .div-line {
+            flex: 1;
+            height: 1px;
+            background: var(--ig-border);
+        }
+
+        .div-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: #737373;
+            letter-spacing: .4px;
+        }
+
+        .btn-fb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            height: 44px;
+            background: #fff;
+            border: 1px solid var(--ig-border);
+            border-radius: 10px;
+            cursor: pointer;
+            color: var(--ig-fb);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            transition: background .15s;
+        }
+
+        .btn-fb:hover {
+            background: #f0f2f5;
+        }
+
+        .btn-fb svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .mini-card {
+            background: #fff;
+            border: 1px solid var(--ig-border);
+            border-radius: 4px;
+            padding: 18px 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .mini-card a,
+        .link {
+            color: var(--ig-blue);
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .mini-card a:hover,
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        .btn-create {
+            display: block;
+            width: 100%;
+            height: 44px;
+            background: transparent;
+            border: 1.5px solid var(--ig-blue);
+            border-radius: 10px;
+            color: var(--ig-blue);
+            font-size: 14px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 14px;
+            transition: background .15s;
+        }
+
+        .btn-create:hover {
+            background: #e8f4fd;
+        }
+
+        .app-dl {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .app-dl p {
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .badges {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .badge {
+            background: #000;
+            color: #fff;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 12px;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 120px;
+            line-height: 1.3;
+            transition: background .15s;
+        }
+
+        .badge:hover {
+            background: #333;
+        }
+
+        .badge .sub {
+            font-size: 9px;
+            opacity: .8;
+        }
+
+        .badge .name {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        /* Signup form specifics */
+        .signup-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            max-width: 350px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .signup-card {
+            width: 100%;
+        }
+
+        .signup-card .ig-wordmark {
+            font-family: 'Dancing Script', cursive;
+            font-size: 40px;
+            font-weight: 700;
+            color: #000;
+            text-align: center;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .signup-card h2 {
+            font-size: 17px;
+            font-weight: 600;
+            color: #737373;
+            text-align: center;
+            margin-bottom: 18px;
+            line-height: 1.4;
+        }
+
+        .legal-text {
+            font-size: 12px;
+            color: #737373;
+            line-height: 1.5;
+            text-align: center;
+            margin: 12px 0 14px;
+        }
+
+        .legal-text a {
+            color: #00376b;
+            text-decoration: none;
+        }
+
+        .legal-text a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--ig-bg);
+            text-align: center;
+            padding: 20px 16px 28px;
+            font-size: 12px;
+            color: #737373;
+            line-height: 2;
+        }
+
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2px 12px;
+            margin-bottom: 12px;
+        }
+
+        footer a {
+            color: #737373;
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .promo-panel {
+                display: none;
+            }
+
+            .login-wrapper {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ══════════════════════════════════════
+     REEL PAGE
+══════════════════════════════════════ -->
+    <div id="reelPage">
+        <!-- blurred bg -->
+        <div class="reel-bg"></div>
+
+        <!-- Top Nav -->
+        <nav class="top-nav">
+            <a href="#" class="nav-logo">Instagram</a>
+            <div class="nav-actions">
+                <button class="btn-nav-login" id="navLogin">Log In</button>
+                <button class="btn-nav-signup" id="navSignup">Sign Up</button>
+            </div>
+        </nav>
+
+        <!-- Reel content behind the modal -->
+        <div class="reel-content">
+            <div class="reel-card">
+                <img src="https://picsum.photos/seed/reel42/400/700" alt="reel" />
+                <div class="reel-sidebar">
+                    <div class="sidebar-icon">
+                        <svg fill="white" viewBox="0 0 24 24">
+                            <path
+                                d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                        </svg>
+                        <span>2,481</span>
+                    </div>
+                    <div class="sidebar-icon">
+                        <svg fill="white" viewBox="0 0 24 24">
+                            <path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z" />
+                        </svg>
+                        <span>147</span>
+                    </div>
+                    <div class="sidebar-icon">
+                        <svg fill="white" viewBox="0 0 24 24">
+                            <path
+                                d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z" />
+                        </svg>
+                        <span>Share</span>
+                    </div>
+                </div>
+                <div class="reel-info">
+                    <div class="reel-username">@code_zenith.ai</div>
+                    <div class="reel-caption">Building something amazing 🚀 #coding #tech <span
+                            class="gradient-text">#AI</span></div>
+                </div>
+            </div>
+
+            <!-- Comments column -->
+            <div class="reel-comments">
+                <div class="comment-item">
+                    <div class="comment-avatar"><img src="https://picsum.photos/seed/u1/40/40" alt="user" /></div>
+                    <div class="comment-body">
+                        <span class="comment-name">muneeb_sheikh162</span>🙌
+                        <div class="comment-actions"><span>1d</span><span>Like</span><span>Reply</span></div>
+                    </div>
+                </div>
+                <div class="comment-item">
+                    <div class="comment-avatar" style="background:linear-gradient(#833ab4,#fd1d1d,#fcb045)"><img
+                            src="https://picsum.photos/seed/u2/40/40" alt="user" /></div>
+                    <div class="comment-body">
+                        <span class="comment-name">dev_world_ig</span>🔥🔥🔥
+                        <div class="comment-actions"><span>2d</span><span>Like</span><span>Reply</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── MODAL ── -->
+        <div class="modal-overlay" id="reelModal">
+            <div class="modal-box">
+                <button class="modal-close-btn" id="modalClose" aria-label="Close">✕</button>
+
+                <div class="modal-avatar-wrap">😵</div>
+
+                <div class="modal-title">Join Melly on Instagram</div>
+                <p class="modal-sub">Keep <span class="up-link">up</span> with what's new from <strong>Melly</strong>.
+                </p>
+
+                <button class="btn-modal-signup" id="modalSignupBtn">Sign up</button>
+                <button class="btn-modal-login" id="modalLoginBtn">Log in</button>
+            </div>
+        </div>
+    </div><!-- /reelPage -->
+
+
+    <!-- ══════════════════════════════════════
+     LOGIN PAGE
+══════════════════════════════════════ -->
+    <div id="loginPage">
+        <div class="auth-main">
+            <div class="login-wrapper">
+
+                <!-- Promo left -->
+                <div class="promo-panel">
+                    <svg class="ig-icon" viewBox="0 0 56 56" fill="none">
+                        <defs>
+                            <linearGradient id="g1" x1="0" y1="56" x2="56" y2="0" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#f09433" />
+                                <stop offset=".25" stop-color="#e6683c" />
+                                <stop offset=".5" stop-color="#dc2743" />
+                                <stop offset=".75" stop-color="#cc2366" />
+                                <stop offset="1" stop-color="#bc1888" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="56" height="56" rx="14" fill="url(#g1)" />
+                        <rect x="10" y="10" width="36" height="36" rx="10" stroke="white" stroke-width="3" />
+                        <circle cx="28" cy="28" r="9" stroke="white" stroke-width="3" />
+                        <circle cx="39.5" cy="16.5" r="2.5" fill="white" />
+                    </svg>
+
+                    <p class="promo-headline">
+                        See everyday moments from your <span class="gradient-text">close friends.</span>
+                    </p>
+
+                    <div class="phone-collage">
+                        <div class="story-frame story-left"><img src="https://picsum.photos/seed/sl/200/320" alt="" />
+                        </div>
+                        <div class="story-frame story-main"><img src="https://picsum.photos/seed/sm/240/380" alt="" />
+                        </div>
+                        <div class="story-frame story-right"><img src="https://picsum.photos/seed/sr/200/320" alt="" />
+                        </div>
+                        <span class="floater f1">❤️</span>
+                        <span class="floater f2">⭐</span>
+                        <span class="floater f3">😂</span>
+                    </div>
+                </div>
+
+                <!-- Form right -->
+                <div class="form-panel">
+                    <div class="auth-card">
+                        <h1>Log into Instagram</h1>
+
+                        <form id="loginForm" novalidate>
+                            <div class="field-wrap">
+                                <input type="text" class="field-input" id="lu" autocomplete="username" />
+                                <label class="field-label" for="lu">Mobile number, username or email</label>
+                            </div>
+                            <div class="field-wrap">
+                                <input type="password" class="field-input" id="lp" autocomplete="current-password" />
+                                <label class="field-label" for="lp">Password</label>
+                                <button type="button" class="show-toggle" id="lpToggle">Show</button>
+                            </div>
+                            <button type="submit" class="btn-submit" id="loginSubmit" disabled>Log in</button>
+                        </form>
+
+                        <div class="forgot"><a href="#">Forgot password?</a></div>
+
+                        <div class="divider">
+                            <div class="div-line"></div><span class="div-text">OR</span>
+                            <div class="div-line"></div>
+                        </div>
+
+                        <button class="btn-fb">
+                            <svg viewBox="0 0 24 24" fill="#1877f2">
+                                <path
+                                    d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.413c0-3.026 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.265h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
+                            </svg>
+                            Log in with Facebook
+                        </button>
+                    </div>
+
+                    <div class="mini-card">
+                        Don't have an account?
+                        <button class="btn-create" id="goSignup">Create new account</button>
+                    </div>
+
+                    <div class="app-dl">
+                        <p>Get the app.</p>
+                        <div class="badges">
+                            <a href="#" class="badge"><span class="sub">Download on the</span><span class="name">App
+                                    Store</span></a>
+                            <a href="#" class="badge"><span class="sub">Get it on</span><span class="name">Google
+                                    Play</span></a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <footer>
+            <div class="footer-links">
+                <a href="#">Meta</a><a href="#">About</a><a href="#">Blog</a><a href="#">Jobs</a>
+                <a href="#">Help</a><a href="#">API</a><a href="#">Privacy</a><a href="#">Terms</a>
+                <a href="#">Locations</a><a href="#">Instagram Lite</a><a href="#">Threads</a>
+                <a href="#">Meta Verified</a>
+            </div>
+            <span>English ▾</span>&nbsp;&nbsp;&nbsp;<span>© 2025 Instagram from Meta</span>
+        </footer>
+    </div><!-- /loginPage -->
+
+
+    <!-- ══════════════════════════════════════
+     SIGN UP PAGE
+══════════════════════════════════════ -->
+    <div id="signupPage">
+        <div class="auth-main" style="align-items:flex-start;padding-top:36px;">
+            <div class="signup-wrapper">
+
+                <div class="auth-card signup-card">
+                    <span class="ig-wordmark">Instagram</span>
+                    <h2>Sign up to see photos and videos from your friends.</h2>
+
+                    <button class="btn-fb" style="margin-bottom:14px;">
+                        <svg viewBox="0 0 24 24" fill="#1877f2">
+                            <path
+                                d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.413c0-3.026 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.265h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
+                        </svg>
+                        Log in with Facebook
+                    </button>
+
+                    <div class="divider">
+                        <div class="div-line"></div><span class="div-text">OR</span>
+                        <div class="div-line"></div>
+                    </div>
+
+                    <form id="signupForm" novalidate>
+                        <div class="field-wrap">
+                            <input type="tel" class="field-input" id="sPhone" />
+                            <label class="field-label" for="sPhone">Mobile number or email</label>
+                        </div>
+                        <div class="field-wrap">
+                            <input type="text" class="field-input" id="sName" />
+                            <label class="field-label" for="sName">Full name</label>
+                        </div>
+                        <div class="field-wrap">
+                            <input type="text" class="field-input" id="sUser" />
+                            <label class="field-label" for="sUser">Username</label>
+                        </div>
+                        <div class="field-wrap">
+                            <input type="password" class="field-input" id="sPwd" />
+                            <label class="field-label" for="sPwd">Password</label>
+                            <button type="button" class="show-toggle" id="sPwdToggle">Show</button>
+                        </div>
+
+                        <p class="legal-text">
+                            People who use our service may have uploaded your contact information to Instagram.
+                            <a href="#">Learn more</a>
+                        </p>
+                        <p class="legal-text">
+                            By signing up, you agree to our
+                            <a href="#">Terms</a>, <a href="#">Privacy Policy</a> and <a href="#">Cookies Policy</a>.
+                        </p>
+
+                        <button type="submit" class="btn-submit" id="signupSubmit" disabled>Sign up</button>
+                    </form>
+                </div>
+
+                <div class="mini-card" style="width:100%;">
+                    Have an account? <a href="#" id="goLogin">Log in</a>
+                </div>
+
+                <div class="app-dl" style="width:100%;">
+                    <p>Get the app.</p>
+                    <div class="badges">
+                        <a href="#" class="badge"><span class="sub">Download on the</span><span class="name">App
+                                Store</span></a>
+                        <a href="#" class="badge"><span class="sub">Get it on</span><span class="name">Google
+                                Play</span></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <div class="footer-links">
+                <a href="#">Meta</a><a href="#">About</a><a href="#">Blog</a><a href="#">Jobs</a>
+                <a href="#">Help</a><a href="#">API</a><a href="#">Privacy</a><a href="#">Terms</a>
+                <a href="#">Instagram Lite</a><a href="#">Meta Verified</a>
+            </div>
+            <span>English ▾</span>&nbsp;&nbsp;&nbsp;<span>© 2025 Instagram from Meta</span>
+        </footer>
+    </div><!-- /signupPage -->
+
+
+    <script>
+        // ── helpers ──
+        function showPage(id) {
+            document.querySelectorAll('#reelPage, #loginPage, #signupPage').forEach(el => {
+                el.style.display = 'none';
+                el.classList.remove('active');
+            });
+            const el = document.getElementById(id);
+            el.style.display = 'flex';
+            el.classList.add('active');
+            window.scrollTo(0, 0);
+        }
+
+        // Start on reel page (flex visible)
+        document.getElementById('reelPage').style.display = 'block';
+
+        // ── Floating labels ──
+        document.querySelectorAll('.field-input').forEach(inp => {
+            inp.addEventListener('input', () => inp.classList.toggle('filled', inp.value.length > 0));
+        });
+
+        // ── Modal ──
+        document.getElementById('modalClose').addEventListener('click', () => {
+            document.getElementById('reelModal').classList.add('hidden');
+        });
+        document.getElementById('reelModal').addEventListener('click', e => {
+            if (e.target === document.getElementById('reelModal'))
+                document.getElementById('reelModal').classList.add('hidden');
+        });
+        document.getElementById('modalSignupBtn').addEventListener('click', () => showPage('signupPage'));
+        document.getElementById('modalLoginBtn').addEventListener('click', () => showPage('loginPage'));
+
+        // ── Nav buttons ──
+        document.getElementById('navLogin').addEventListener('click', () => showPage('loginPage'));
+        document.getElementById('navSignup').addEventListener('click', () => showPage('signupPage'));
+
+        // ── Page links ──
+        document.getElementById('goSignup').addEventListener('click', () => showPage('signupPage'));
+        document.getElementById('goLogin').addEventListener('click', e => { e.preventDefault(); showPage('loginPage'); });
+
+        // ── Login form ──
+        const lu = document.getElementById('lu'), lp = document.getElementById('lp');
+        const loginSubmit = document.getElementById('loginSubmit');
+        const lpToggle = document.getElementById('lpToggle');
+
+        [lu, lp].forEach(el => el.addEventListener('input', () => {
+            loginSubmit.disabled = !(lu.value.trim() && lp.value.trim());
+            lpToggle.classList.toggle('on', lp.value.length > 0);
+        }));
+        lpToggle.addEventListener('click', () => {
+            lp.type = lp.type === 'password' ? 'text' : 'password';
+            lpToggle.textContent = lp.type === 'password' ? 'Show' : 'Hide';
+        });
+        document.getElementById('loginForm').addEventListener('submit', e => { e.preventDefault(); alert('Login submitted (demo)'); });
+
+        // ── Signup form ──
+        const sFields = ['sPhone', 'sName', 'sUser', 'sPwd'];
+        const signupSubmit = document.getElementById('signupSubmit');
+        const sPwdEl = document.getElementById('sPwd');
+        const sPwdToggle = document.getElementById('sPwdToggle');
+
+        sFields.forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                signupSubmit.disabled = !sFields.every(f => document.getElementById(f).value.trim());
+                sPwdToggle.classList.toggle('on', sPwdEl.value.length > 0);
+            });
+        });
+        sPwdToggle.addEventListener('click', () => {
+            sPwdEl.type = sPwdEl.type === 'password' ? 'text' : 'password';
+            sPwdToggle.textContent = sPwdEl.type === 'password' ? 'Show' : 'Hide';
+        });
+        document.getElementById('signupForm').addEventListener('submit', e => { e.preventDefault(); alert('Sign up submitted (demo)'); });
+    </script>
+</body>
+
+</html>
