@@ -84,7 +84,8 @@ const SearchContent: React.FC<SearchContentProps> = ({ term }) => {
                     const data = await res.json();
                     if (data.url) {
                         setHubProgress(100);
-                        triggerBrowserDownload(data.url, data.filename || filename);
+                        const proxyUrl = `/api/download?action=proxy&url=${encodeURIComponent(data.url)}&download=true&title=${encodeURIComponent(track.title)}&ext=.${ext}`;
+                        triggerBrowserDownload(proxyUrl, data.filename || filename);
                         return true;
                     }
                 } else {

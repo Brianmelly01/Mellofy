@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import Innertube, { UniversalCache } from "youtubei.js";
 import ytdl from "@distube/ytdl-core";
-import youtubedl from "youtube-dl-exec";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -112,38 +112,53 @@ async function raceInstances<T>(
     try { return await Promise.any(promises); } catch { return null; }
 }
 
-// ── Phase 0: Local yt-dlp ──
-async function extractViaYtDlp(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
-    console.log(`yt-dlp: Trying ${videoId} (${type})...`);
-    try {
-        const output = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
-            dumpSingleJson: true,
-            noCheckCertificates: true,
-            noWarnings: true,
-            preferFreeFormats: true,
-            addHeader: [
-                'referer:youtube.com',
-                'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-            ]
+// ── Phase 0: youtubei.js (ANDROID / TV_EMBEDDED) ──
+let ytClient: any = null;
+async function getYTClient() {
+    if (!ytClient) {
+        ytClient = await Innertube.create({
+            retrieve_player: true,
+            generate_session_locally: true,
+            cache: new UniversalCache(false),
+            client_type: "ANDROID" as any
         });
+    }
+    return ytClient;
+}
+
+async function extractViaYtjs(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    console.log(`ytjs: Trying ${videoId} (${type})...`);
+    try {
+        const yt = await getYTClient();
+        const info = await yt.getBasicInfo(videoId, "ANDROID");
+        const allFormats = [
+            ...(info.streaming_data?.adaptive_formats || []),
+            ...(info.streaming_data?.formats || [])
+        ];
+
+        const title = info.basic_info?.title || "download";
 
         if (type === "audio") {
-            const audioFormats = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec === 'none');
+            const audioFormats = allFormats.filter((f: any) => f.has_audio && !f.has_video && !!f.url);
+            // Sort by bitrate descending
+            audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
             const url = audioFormats?.[0]?.url;
-            if (url) return { url, title: output.title || "download" };
+            if (url) return { url, title };
         } else {
-            // For video streaming in ReactPlayer, we need a single URL containing both video and audio.
-            const combined = output.formats.filter((f: any) => f.vcodec !== 'none' && f.acodec !== 'none');
-            let url = combined?.[combined.length - 1]?.url || combined?.[0]?.url;
+            // For video streaming in ReactPlayer, try to get a multiplexed format (audio+video)
+            const combined = allFormats.filter((f: any) => f.has_video && f.has_audio && !!f.url);
+            combined.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            let url = combined?.[0]?.url;
 
             if (!url) {
-                const bestVideo = output.formats.filter((f: any) => f.vcodec !== 'none');
-                url = bestVideo?.[bestVideo.length - 1]?.url;
+                const videoOnly = allFormats.filter((f: any) => f.has_video && !!f.url);
+                videoOnly.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+                url = videoOnly?.[0]?.url;
             }
-            if (url) return { url, title: output.title || "download" };
+            if (url) return { url, title };
         }
     } catch (e: any) {
-        console.error("yt-dlp error:", e.message?.slice(0, 100));
+        console.error("ytjs error:", e.message?.slice(0, 100));
     }
     return null;
 }
@@ -152,11 +167,11 @@ async function extractViaYtDlp(videoId: string, type: string): Promise<{ url: st
 async function extractStream(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const errors: string[] = [];
 
-    // Phase 0: Local yt-dlp
+    // Phase 0: ytjs 
     try {
-        const result = await extractViaYtDlp(videoId, type);
+        const result = await extractViaYtjs(videoId, type);
         if (result) return result;
-        errors.push("P0:yt-dlp null");
+        errors.push("P0:ytjs null");
     } catch (e: any) {
         errors.push(`P0:${e?.message}`);
     }
@@ -235,6 +250,13 @@ export async function GET(request: NextRequest) {
                 resHeaders.set("Content-Range", proxyRes.headers.get("Content-Range")!);
             }
             resHeaders.set("Accept-Ranges", proxyRes.headers.get("Accept-Ranges") || "bytes");
+
+            if (searchParams.get("download") === "true") {
+                const title = searchParams.get("title") || "download";
+                const ext = searchParams.get("ext") || ".mp4";
+                const filename = `${title.replace(/[^\w\s-]/g, "")}${ext}`;
+                resHeaders.set("Content-Disposition", `attachment; filename="${filename}"`);
+            }
 
             return new NextResponse(proxyRes.body, {
                 status: proxyRes.status,

@@ -175,7 +175,9 @@ const Player = () => {
                     const data = await res.json();
                     if (data.url) {
                         setHubProgress(90);
-                        triggerLink(data.url, data.filename || filename);
+                        const ext = t === 'audio' ? '.mp3' : '.mp4';
+                        const proxyUrl = `/api/download?action=proxy&url=${encodeURIComponent(data.url)}&download=true&title=${encodeURIComponent(track.title)}&ext=${ext}`;
+                        triggerLink(proxyUrl, data.filename || filename);
                         return true;
                     }
                 } else {
@@ -192,7 +194,9 @@ const Player = () => {
                 const cobalt = await cobaltBrowserExtract(track.id, t);
                 if (cobalt?.url) {
                     setHubProgress(90);
-                    triggerLink(cobalt.url, cobalt.filename || filename);
+                    const ext = t === 'audio' ? '.mp3' : '.mp4';
+                    const proxyUrl = `/api/download?action=proxy&url=${encodeURIComponent(cobalt.url)}&download=true&title=${encodeURIComponent(track.title)}&ext=${ext}`;
+                    triggerLink(proxyUrl, cobalt.filename || filename);
                     return true;
                 }
             } catch (e: any) {
