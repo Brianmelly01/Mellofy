@@ -1,18 +1,17 @@
-import ytdl from '@distube/ytdl-core';
+import ytdl from "@distube/ytdl-core";
 
 async function testYtdl() {
-    const videoId = "dQw4w9WgXcQ";
-    console.log(`ytdl: Trying ${videoId}...`);
     try {
-        const info = await ytdl.getInfo(videoId);
-        const allFormats = info.formats;
-        const combined = ytdl.filterFormats(allFormats, 'videoandaudio');
-        if (combined.length > 0) {
-            combined.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-            console.log("Combined Format URL:", combined[0].url.slice(0, 50));
-        } else {
-            console.log("No combined formats found");
-        }
+        console.log("Fetching with ytdl-core...");
+        const info = await ytdl.getInfo("jNQXAC9IVRw");
+        const format = ytdl.chooseFormat(info.formats, { filter: "audioandvideo" });
+        console.log("Best combined format:", format.mimeType, format.qualityLabel);
+        console.log("URL:", format.url ? "Yes" : "No");
+
+        const audioFormat = ytdl.chooseFormat(info.formats, { filter: "audioonly" });
+        console.log("Best audio format:", audioFormat.mimeType, audioFormat.audioBitrate);
+        console.log("Audio URL:", audioFormat.url ? "Yes" : "No");
+
     } catch (e) {
         console.error("ytdl error:", e.message);
     }

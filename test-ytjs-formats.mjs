@@ -1,22 +1,38 @@
-import { Innertube, UniversalCache } from 'youtubei.js';
+import Innertube, { UniversalCache, Platform } from "youtubei.js";
+import { Jinter } from "jintr";
 
-async function testExtraction() {
-    console.log("Creating Innertube...");
+(Platform.shim).eval = (data, env) => {
+    const jinter = new Jinter();
+    for (const [key, val] of Object.entries(env)) jinter.scope.set(key, val);
+    jinter.evaluate(data.script);
+    const result = {};
+    for (const [key] of Object.entries(env)) result[key] = jinter.scope.get(key);
+    return result;
+};
+
+async function testVideo() {
     const yt = await Innertube.create({
         retrieve_player: true,
         generate_session_locally: true,
         cache: new UniversalCache(false)
     });
-    console.log("Getting info...");
-    const info = await yt.getBasicInfo("dQw4w9WgXcQ");
 
-    // Choose combined video+audio
-    try {
-        const format = info.chooseFormat({ type: 'video+audio', quality: 'best' });
-        const url = format.decipher(yt.session.player);
-        console.log("Deciphered URL:", url.slice(0, 100));
-    } catch (e) {
-        console.log("Error choosing combined format:", e.message);
+    const info = await yt.getBasicInfo("jNQXAC9IVRw");
+    const allFormats = [
+        ...(info.streaming_data?.adaptive_formats || []),
+        ...(info.streaming_data?.formats || [])
+    ];
+
+    const combined = allFormats.filter(f => f.has_video && f.has_audio);
+    console.log("COMBINED AUDIO+VIDEO FORMATS:");
+    for (const f of combined) {
+        console.log(`- ${f.mime_type} (${f.quality}): has url? ${!!f.url}, has signatureCipher? ${!!f.signature_cipher}`);
+    }
+
+    const videoOnly = allFormats.filter(f => f.has_video && !f.has_audio);
+    console.log("\nVIDEO-ONLY FORMATS:");
+    for (const f of videoOnly) {
+        console.log(`- ${f.mime_type} (${f.quality}): has url? ${!!f.url}, has signatureCipher? ${!!f.signature_cipher}`);
     }
 }
-testExtraction();
+testVideo();

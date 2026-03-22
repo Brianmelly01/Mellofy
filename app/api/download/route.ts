@@ -204,17 +204,57 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
     return null;
 }
 
+// ── Phase 1: ytdl-core ──
+async function extractViaYtdl(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    console.log(`ytdl: Trying ${videoId} (${type})...`);
+    try {
+        const info = await ytdl.getInfo(videoId);
+        const title = info.videoDetails?.title || "download";
+
+        if (type === "audio") {
+            try {
+                const format = ytdl.chooseFormat(info.formats, { filter: "audioonly", quality: "highestaudio" });
+                if (format?.url) return { url: format.url, title };
+            } catch { }
+        } else {
+            // First try combined audio and video
+            try {
+                const combined = ytdl.chooseFormat(info.formats, { filter: "audioandvideo" });
+                if (combined?.url) return { url: combined.url, title };
+            } catch { }
+
+            // Fallback to video only
+            try {
+                const videoOnly = ytdl.chooseFormat(info.formats, { filter: "videoonly" });
+                if (videoOnly?.url) return { url: videoOnly.url, title };
+            } catch { }
+        }
+    } catch (e: any) {
+        console.error("ytdl error:", e.message?.slice(0, 100));
+    }
+    return null;
+}
+
 // ── Full extraction pipeline ──
 async function extractStream(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const errors: string[] = [];
 
-    // Phase 0: ytjs 
+    // Phase 1: ytdl-core
+    try {
+        const result = await extractViaYtdl(videoId, type);
+        if (result) return result;
+        errors.push("P1:ytdl null");
+    } catch (e: any) {
+        errors.push(`P1:${e?.message}`);
+    }
+
+    // Phase 2: ytjs 
     try {
         const result = await extractViaYtjs(videoId, type);
         if (result) return result;
-        errors.push("P0:ytjs null");
+        errors.push("P2:ytjs null");
     } catch (e: any) {
-        errors.push(`P0:${e?.message}`);
+        errors.push(`P2:${e?.message}`);
     }
 
     // Phase 1 & 2: Cobalt
