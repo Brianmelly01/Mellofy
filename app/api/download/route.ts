@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Innertube, { UniversalCache, Platform } from "youtubei.js";
-import ytdl from "@distube/ytdl-core";
+import youtubedl from "youtube-dl-exec";
 import { Jinter } from "jintr";
 
 // Patch Platform.shim.eval with Jintr so youtubei.js can decipher URL signatures
@@ -204,33 +204,38 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
     return null;
 }
 
-// ── Phase 1: ytdl-core ──
-async function extractViaYtdl(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
-    console.log(`ytdl: Trying ${videoId} (${type})...`);
+// ── Phase 1: youtube-dl-exec ──
+async function extractViaYtDlp(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
+    console.log(`yt-dlp: Trying ${videoId} (${type})...`);
     try {
-        const info = await ytdl.getInfo(videoId);
-        const title = info.videoDetails?.title || "download";
+        const output = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
+            dumpSingleJson: true,
+            noCheckCertificates: true,
+            noWarnings: true,
+            preferFreeFormats: true,
+            addHeader: [
+                'referer:youtube.com',
+                'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+            ]
+        }) as any;
+
+        const title = output.title || "download";
 
         if (type === "audio") {
-            try {
-                const format = ytdl.chooseFormat(info.formats, { filter: "audioonly", quality: "highestaudio" });
-                if (format?.url) return { url: format.url, title };
-            } catch { }
+            const audioFormats = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec === 'none');
+            // Prefer the highest bitrate audio if we want, but taking the first valid one works for speed.
+            if (audioFormats.length > 0) return { url: audioFormats[0].url, title };
         } else {
             // First try combined audio and video
-            try {
-                const combined = ytdl.chooseFormat(info.formats, { filter: "audioandvideo" });
-                if (combined?.url) return { url: combined.url, title };
-            } catch { }
+            const combined = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec !== 'none');
+            if (combined.length > 0) return { url: combined[0].url, title };
 
             // Fallback to video only
-            try {
-                const videoOnly = ytdl.chooseFormat(info.formats, { filter: "videoonly" });
-                if (videoOnly?.url) return { url: videoOnly.url, title };
-            } catch { }
+            const videoOnly = output.formats.filter((f: any) => f.vcodec !== 'none');
+            if (videoOnly.length > 0) return { url: videoOnly[0].url, title };
         }
     } catch (e: any) {
-        console.error("ytdl error:", e.message?.slice(0, 100));
+        console.error("yt-dlp error:", e.message?.slice(0, 200));
     }
     return null;
 }
@@ -239,11 +244,11 @@ async function extractViaYtdl(videoId: string, type: string): Promise<{ url: str
 async function extractStream(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
     const errors: string[] = [];
 
-    // Phase 1: ytdl-core
+    // Phase 1: yt-dlp
     try {
-        const result = await extractViaYtdl(videoId, type);
+        const result = await extractViaYtDlp(videoId, type);
         if (result) return result;
-        errors.push("P1:ytdl null");
+        errors.push("P1:yt-dlp null");
     } catch (e: any) {
         errors.push(`P1:${e?.message}`);
     }
