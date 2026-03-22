@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import Innertube, { UniversalCache, Platform } from "youtubei.js";
-import youtubedl from "youtube-dl-exec";
 import { Jinter } from "jintr";
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
 
 // Patch Platform.shim.eval with Jintr so youtubei.js can decipher URL signatures
 // This runs once at module load, before any Innertube instance is created.
@@ -204,38 +210,48 @@ async function extractViaYtjs(videoId: string, type: string): Promise<{ url: str
     return null;
 }
 
-// ── Phase 1: youtube-dl-exec ──
+// ── Phase 1: yt-dlp standalone binary ──
+async function downloadYtDlp() {
+    const isWindows = os.platform() === 'win32';
+    const binName = isWindows ? 'yt-dlp.exe' : 'yt-dlp_linux';
+    const binaryPath = path.join(os.tmpdir(), binName);
+
+    if (!fs.existsSync(binaryPath)) {
+        console.log(`Downloading ${binName} to ${binaryPath}...`);
+        const res = await fetch(`https://github.com/yt-dlp/yt-dlp/releases/latest/download/${binName}`);
+        if (!res.ok) throw new Error("Failed to download yt-dlp");
+        const arrayBuffer = await res.arrayBuffer();
+        fs.writeFileSync(binaryPath, Buffer.from(arrayBuffer));
+        if (!isWindows) fs.chmodSync(binaryPath, '755');
+    }
+    return binaryPath;
+}
+
 async function extractViaYtDlp(videoId: string, type: string): Promise<{ url: string; title: string } | null> {
-    console.log(`yt-dlp: Trying ${videoId} (${type})...`);
+    console.log(`yt-dlp binary: Trying ${videoId} (${type})...`);
     try {
-        const output = await youtubedl(`https://www.youtube.com/watch?v=${videoId}`, {
-            dumpSingleJson: true,
-            noCheckCertificates: true,
-            noWarnings: true,
-            preferFreeFormats: true,
-            addHeader: [
-                'referer:youtube.com',
-                'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-            ]
-        }) as any;
+        const binPath = await downloadYtDlp();
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        const cmd = `"${binPath}" -J --no-warnings --no-check-certificates "${url}"`;
+        // Increase maxBuffer to 10MB (1024 * 1024 * 10) because JSON metadata can be large
+        const { stdout } = await execPromise(cmd, { maxBuffer: 10485760 });
+        const output = JSON.parse(stdout);
 
         const title = output.title || "download";
 
         if (type === "audio") {
             const audioFormats = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec === 'none');
-            // Prefer the highest bitrate audio if we want, but taking the first valid one works for speed.
+            audioFormats.sort((a: any, b: any) => (b.abr || 0) - (a.abr || 0));
             if (audioFormats.length > 0) return { url: audioFormats[0].url, title };
         } else {
-            // First try combined audio and video
             const combined = output.formats.filter((f: any) => f.acodec !== 'none' && f.vcodec !== 'none');
             if (combined.length > 0) return { url: combined[0].url, title };
 
-            // Fallback to video only
             const videoOnly = output.formats.filter((f: any) => f.vcodec !== 'none');
             if (videoOnly.length > 0) return { url: videoOnly[0].url, title };
         }
     } catch (e: any) {
-        console.error("yt-dlp error:", e.message?.slice(0, 200));
+        console.error("yt-dlp binary error:", e.message?.slice(0, 200));
     }
     return null;
 }
